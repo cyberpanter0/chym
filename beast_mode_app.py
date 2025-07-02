@@ -72,8 +72,7 @@ st.markdown("""
 # Sabitler
 GROQ_API_KEY = "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"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
+MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&ssl=true&ssl_cert_reqs=CERT_NONE&tlsAllowInvalidCertificates=true"
 # Beast Mode Verileri - Düzeltilmiş
 BEAST_MODE_DATA = {
     'exercises': {
