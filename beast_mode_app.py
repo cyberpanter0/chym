@@ -1,803 +1,578 @@
-import React, { useState, useEffect } from 'react';
-import { User, MessageCircle, BarChart3, Target, Calendar, LogOut, Eye, EyeOff, Plus, TrendingUp } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import requests
+import json
+import time
 
-const BeastModeFitnessApp = () => {
-  // Embedded API Key
-  const GROQ_API_KEY = "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";
-  
-  // State Management
-  const [currentUser, setCurrentUser] = useState(null);
-  const [showLogin, setShowLogin] = useState(true);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  
-  // Form States
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ 
-    name: '', username: '', password: '', weight: 70, age: 25, goal: 'muscle_gain' 
-  });
-  
-  // Chat and Exercise States
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState([]);
-  const [exerciseLog, setExerciseLog] = useState([]);
-  const [beastModeScore, setBeastModeScore] = useState(75);
+# Sayfa konfigürasyonu
+st.set_page_config(
+    page_title="🦁 Beast Mode Coach",
+    page_icon="🦁",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-  // Mock Database (In production, this would be MongoDB)
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      name: 'Han',
-      username: 'han123',
-      password: '123456',
-      weight: 75,
-      age: 25,
-      goal: 'muscle_gain',
-      joinDate: new Date('2024-01-15'),
-      exerciseHistory: [
-        { date: '2024-07-01', exercise: 'Push-up', sets: 4, reps: 15, muscleGroup: 'chest' },
-        { date: '2024-07-01', exercise: 'Squat', sets: 3, reps: 20, muscleGroup: 'legs' },
-        { date: '2024-06-30', exercise: 'Pull-up', sets: 3, reps: 8, muscleGroup: 'back' }
-      ],
-      chatHistory: [
-        { date: '2024-07-02', message: 'Bugün çok yorgunum', response: 'Dinlenme de antrenmanın bir parçası Han! Bugün hafif bir yürüyüş yap.', type: 'general' }
-      ]
+# CSS Stilleri
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(135deg, #FF6B35, #F7931E);
+        padding: 2rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
     }
-  ]);
+    .metric-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #FF6B35;
+    }
+    .chat-message {
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        border-radius: 10px;
+        max-width: 70%;
+    }
+    .user-message {
+        background-color: #FF6B35;
+        color: white;
+        margin-left: 30%;
+    }
+    .ai-message {
+        background-color: #f0f2f6;
+        color: #333;
+        margin-right: 30%;
+    }
+    .exercise-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        margin: 0.5rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-  // Beast Mode Data
-  const beastModeData = {
-    exercises: {
-      'push-up': { muscleGroup: 'chest', difficulty: 'beginner' },
-      'pull-up': { muscleGroup: 'back', difficulty: 'intermediate' },
-      'squat': { muscleGroup: 'legs', difficulty: 'beginner' },
-      'plank': { muscleGroup: 'core', difficulty: 'beginner' },
-      'burpee': { muscleGroup: 'full_body', difficulty: 'advanced' },
-      'diamond push-up': { muscleGroup: 'chest', difficulty: 'intermediate' },
-      'pistol squat': { muscleGroup: 'legs', difficulty: 'advanced' },
-      'handstand': { muscleGroup: 'shoulders', difficulty: 'advanced' }
+# Sabitler ve Yapılandırma
+GROQ_API_KEY = "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"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# Beast Mode Verileri
+BEAST_MODE_DATA = {
+    'exercises': {
+        'push-up': {'muscleGroup': 'chest', 'difficulty': 'beginner'},
+        'pull-up': {'muscleGroup': 'back', 'difficulty': 'intermediate'},
+        'squat': {'muscleGroup': 'legs', 'difficulty': 'beginner'},
+        'plank': {'muscleGroup': 'core', 'difficulty': 'beginner'},
+        'burpee': {'muscleGroup': 'full_body', 'difficulty': 'advanced'},
+        'diamond push-up': {'muscleGroup': 'chest', 'difficulty': 'intermediate'},
+        'pistol squat': {'muscleGroup': 'legs', 'difficulty': 'advanced'},
+        'handstand': {'muscleGroup': 'shoulders', 'difficulty': 'advanced'}
     },
-    muscleGroups: {
-      chest: '🫴 Göğüs',
-      back: '🔙 Sırt', 
-      legs: '🦵 Bacak',
-      core: '💪 Core',
-      shoulders: '🤲 Omuz',
-      arms: '💪 Kol',
-      full_body: '🎯 Tüm Vücut'
+    'muscle_groups': {
+        'chest': '🫴 Göğüs',
+        'back': '🔙 Sırt', 
+        'legs': '🦵 Bacak',
+        'core': '💪 Core',
+        'shoulders': '🤲 Omuz',
+        'arms': '💪 Kol',
+        'full_body': '🎯 Tüm Vücut'
     }
-  };
+}
 
-  // Analyze message type and extract exercise data
-  const analyzeMessage = (message) => {
-    const exerciseKeywords = ['antrenman', 'egzersiz', 'set', 'tekrar', 'squat', 'push-up', 'pull-up', 'plank', 'burpee'];
-    const generalKeywords = ['yorgun', 'motivasyon', 'nasılım', 'hissediyorum', 'uyku', 'beslenme'];
+# Session State Başlatma
+def init_session_state():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'current_user' not in st.session_state:
+        st.session_state.current_user = None
+    if 'users' not in st.session_state:
+        st.session_state.users = [
+            {
+                'id': 1,
+                'name': 'Han',
+                'username': 'han123',
+                'password': '123456',
+                'weight': 75,
+                'age': 25,
+                'goal': 'muscle_gain',
+                'join_date': datetime(2024, 1, 15),
+                'exercise_history': [
+                    {'date': '2024-07-01', 'exercise': 'push-up', 'sets': 4, 'reps': 15, 'muscle_group': 'chest'},
+                    {'date': '2024-07-01', 'exercise': 'squat', 'sets': 3, 'reps': 20, 'muscle_group': 'legs'},
+                    {'date': '2024-06-30', 'exercise': 'pull-up', 'sets': 3, 'reps': 8, 'muscle_group': 'back'}
+                ],
+                'chat_history': []
+            }
+        ]
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'exercise_log' not in st.session_state:
+        st.session_state.exercise_log = []
+    if 'beast_mode_score' not in st.session_state:
+        st.session_state.beast_mode_score = 75
+
+# Mesaj Analizi
+def analyze_message(message):
+    exercise_keywords = ['antrenman', 'egzersiz', 'set', 'tekrar', 'squat', 'push-up', 'pull-up', 'plank', 'burpee']
+    general_keywords = ['yorgun', 'motivasyon', 'nasılım', 'hissediyorum', 'uyku', 'beslenme']
     
-    const messageLower = message.toLowerCase();
-    const exerciseCount = exerciseKeywords.filter(keyword => messageLower.includes(keyword)).length;
-    const generalCount = generalKeywords.filter(keyword => messageLower.includes(keyword)).length;
+    message_lower = message.lower()
+    exercise_count = sum(1 for keyword in exercise_keywords if keyword in message_lower)
+    general_count = sum(1 for keyword in general_keywords if keyword in message_lower)
     
-    // Extract exercise data if it's an exercise message
-    let exerciseData = null;
-    if (exerciseCount > generalCount) {
-      const exercises = Object.keys(beastModeData.exercises);
-      const foundExercise = exercises.find(ex => messageLower.includes(ex.toLowerCase()));
-      
-      if (foundExercise) {
-        const setMatch = messageLower.match(/(\d+)\s*set/);
-        const repMatch = messageLower.match(/(\d+)\s*tekrar/);
+    exercise_data = None
+    if exercise_count > general_count:
+        exercises = list(BEAST_MODE_DATA['exercises'].keys())
+        found_exercise = next((ex for ex in exercises if ex.lower() in message_lower), None)
         
-        exerciseData = {
-          exercise: foundExercise,
-          sets: setMatch ? parseInt(setMatch[1]) : 3,
-          reps: repMatch ? parseInt(repMatch[1]) : 10,
-          muscleGroup: beastModeData.exercises[foundExercise].muscleGroup
-        };
-      }
-    }
+        if found_exercise:
+            import re
+            set_match = re.search(r'(\d+)\s*set', message_lower)
+            rep_match = re.search(r'(\d+)\s*tekrar', message_lower)
+            
+            exercise_data = {
+                'exercise': found_exercise,
+                'sets': int(set_match.group(1)) if set_match else 3,
+                'reps': int(rep_match.group(1)) if rep_match else 10,
+                'muscle_group': BEAST_MODE_DATA['exercises'][found_exercise]['muscle_group']
+            }
     
     return {
-      type: exerciseCount > generalCount ? 'exercise' : 'general',
-      exerciseData
-    };
-  };
-
-  // Call Groq API for AI coaching
-  const callGroqAPI = async (message, messageType, userData) => {
-    try {
-      const systemPrompt = messageType === 'exercise' 
-        ? `Sen profesyonel bir fitness koçusun. Kullanıcı egzersiz bilgisi paylaştı: "${message}". 
-           Kullanıcı bilgileri: İsim: ${userData.name}, Kilo: ${userData.weight}kg, Yaş: ${userData.age}, Hedef: ${userData.goal}.
-           Motive edici, kısa (max 100 kelime) Türkçe yanıt ver. Egzersiz hakkında teknik tavsiye ver.`
-        : `Sen profesyonel bir fitness koçusun. Kullanıcı genel bir mesaj yazdı: "${message}".
-           Kullanıcı bilgileri: İsim: ${userData.name}, Beast Mode Skoru: %${beastModeScore}.
-           Destekleyici, motive edici, kısa (max 80 kelime) Türkçe yanıt ver. Soru sor ve tavsiye ver.`;
-
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: systemPrompt }],
-          temperature: 0.7,
-          max_tokens: 300
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.choices[0].message.content.trim();
-      } else {
-        return `❌ API Hatası (${response.status}). Tekrar deneyin.`;
-      }
-    } catch (error) {
-      return `❌ Bağlantı hatası: ${error.message}`;
+        'type': 'exercise' if exercise_count > general_count else 'general',
+        'exercise_data': exercise_data
     }
-  };
 
-  // Handle Login
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
-    
-    if (user) {
-      setCurrentUser(user);
-      setShowLogin(false);
-      setChatHistory(user.chatHistory || []);
-      setExerciseLog(user.exerciseHistory || []);
-    } else {
-      alert('❌ Kullanıcı adı veya şifre hatalı!');
-    }
-    
-    setLoading(false);
-  };
+# Groq API Çağrısı
+def call_groq_api(message, message_type, user_data):
+    try:
+        system_prompt = ""
+        if message_type == 'exercise':
+            system_prompt = f"""Sen profesyonel bir fitness koçusun. Kullanıcı egzersiz bilgisi paylaştı: "{message}". 
+                           Kullanıcı bilgileri: İsim: {user_data['name']}, Kilo: {user_data['weight']}kg, Yaş: {user_data['age']}, Hedef: {user_data['goal']}.
+                           Motive edici, kısa (max 100 kelime) Türkçe yanıt ver. Egzersiz hakkında teknik tavsiye ver."""
+        else:
+            system_prompt = f"""Sen profesyonel bir fitness koçusun. Kullanıcı genel bir mesaj yazdı: "{message}".
+                           Kullanıcı bilgileri: İsim: {user_data['name']}, Beast Mode Skoru: %{st.session_state.beast_mode_score}.
+                           Destekleyici, motive edici, kısa (max 80 kelime) Türkçe yanıt ver. Soru sor ve tavsiye ver."""
 
-  // Handle Registration
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const newUser = {
-      id: users.length + 1,
-      ...registerForm,
-      joinDate: new Date(),
-      exerciseHistory: [],
-      chatHistory: []
-    };
-    
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    setShowLogin(false);
-    setLoading(false);
-  };
-
-  // Handle Chat Message
-  const handleChatSubmit = async (e) => {
-    e.preventDefault();
-    if (!chatMessage.trim()) return;
-    
-    setLoading(true);
-    
-    const analysis = analyzeMessage(chatMessage);
-    const aiResponse = await callGroqAPI(chatMessage, analysis.type, currentUser);
-    
-    const newChatEntry = {
-      id: Date.now(),
-      date: new Date().toISOString(),
-      message: chatMessage,
-      response: aiResponse,
-      type: analysis.type
-    };
-    
-    setChatHistory(prev => [...prev, newChatEntry]);
-    
-    // If it's an exercise, add to exercise log
-    if (analysis.exerciseData) {
-      const newExercise = {
-        id: Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        ...analysis.exerciseData
-      };
-      setExerciseLog(prev => [...prev, newExercise]);
-      
-      // Update Beast Mode Score
-      setBeastModeScore(prev => Math.min(100, prev + 2));
-    }
-    
-    setChatMessage('');
-    setLoading(false);
-  };
-
-  // Calculate muscle group distribution
-  const getMuscleGroupData = () => {
-    const groups = {};
-    exerciseLog.forEach(exercise => {
-      const group = exercise.muscleGroup;
-      groups[group] = (groups[group] || 0) + (exercise.sets * exercise.reps);
-    });
-    
-    return Object.entries(groups).map(([group, volume]) => ({
-      name: beastModeData.muscleGroups[group] || group,
-      value: volume,
-      color: getColorForMuscleGroup(group)
-    }));
-  };
-
-  const getColorForMuscleGroup = (group) => {
-    const colors = {
-      chest: '#FF6B35', back: '#4ECDC4', legs: '#45B7D1',
-      core: '#96CEB4', shoulders: '#FECA57', arms: '#FF9FF3',
-      full_body: '#54A0FF'
-    };
-    return colors[group] || '#95A5A6';
-  };
-
-  // Get weekly progress data
-  const getWeeklyProgress = () => {
-    const last7Days = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      const dayExercises = exerciseLog.filter(ex => ex.date === dateStr);
-      const totalVolume = dayExercises.reduce((sum, ex) => sum + (ex.sets * ex.reps), 0);
-      
-      last7Days.push({
-        date: date.toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' }),
-        volume: totalVolume,
-        exercises: dayExercises.length
-      });
-    }
-    return last7Days;
-  };
-
-  // Login/Register UI
-  if (showLogin) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-400 via-red-500 to-pink-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="text-4xl mb-2">🦁</div>
-            <h1 className="text-2xl font-bold text-gray-800">Beast Mode Coach</h1>
-            <p className="text-gray-600">Kişisel Fitness Antrenörün</p>
-          </div>
-
-          {!isRegistering ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Adı</label>
-                <input
-                  type="text"
-                  value={loginForm.username}
-                  onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Kullanıcı adınız"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Şifre</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent pr-10"
-                    placeholder="Şifreniz"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition duration-200 disabled:opacity-50"
-              >
-                {loading ? '🔄 Giriş yapılıyor...' : '🚀 Giriş Yap'}
-              </button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setIsRegistering(true)}
-                  className="text-orange-500 hover:text-orange-600 text-sm"
-                >
-                  Hesabın yok mu? Kayıt ol
-                </button>
-              </div>
-
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-blue-600 font-medium">Demo Hesap:</p>
-                <p className="text-xs text-blue-500">Kullanıcı: han123 | Şifre: 123456</p>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ad Soyad</label>
-                <input
-                  type="text"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm({...registerForm, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Adınız"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Adı</label>
-                <input
-                  type="text"
-                  value={registerForm.username}
-                  onChange={(e) => setRegisterForm({...registerForm, username: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Kullanıcı adı seçin"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Şifre</label>
-                <input
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Güvenli şifre oluşturun"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kilo (kg)</label>
-                  <input
-                    type="number"
-                    value={registerForm.weight}
-                    onChange={(e) => setRegisterForm({...registerForm, weight: parseInt(e.target.value)})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    min="40"
-                    max="200"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Yaş</label>
-                  <input
-                    type="number"
-                    value={registerForm.age}
-                    onChange={(e) => setRegisterForm({...registerForm, age: parseInt(e.target.value)})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    min="16"
-                    max="80"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hedef</label>
-                <select
-                  value={registerForm.goal}
-                  onChange={(e) => setRegisterForm({...registerForm, goal: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="muscle_gain">💪 Kas Kazanımı</option>
-                  <option value="weight_loss">🔥 Kilo Verme</option>
-                  <option value="endurance">🏃 Dayanıklılık</option>
-                  <option value="strength">⚡ Güç Artırımı</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition duration-200 disabled:opacity-50"
-              >
-                {loading ? '🔄 Kayıt oluşturuluyor...' : '✨ Kayıt Ol'}
-              </button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setIsRegistering(false)}
-                  className="text-orange-500 hover:text-orange-600 text-sm"
-                >
-                  Zaten hesabın var mı? Giriş yap
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Main Application UI
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <span className="text-2xl">🦁</span>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Beast Mode Coach</h1>
-                <p className="text-sm text-gray-500">Hoşgeldin, {currentUser?.name}! 👋</p>
-              </div>
-            </div>
+        headers = {
+            'Authorization': f'Bearer {GROQ_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        data = {
+            'model': 'llama-3.3-70b-versatile',
+            'messages': [{'role': 'system', 'content': system_prompt}],
+            'temperature': 0.7,
+            'max_tokens': 300
+        }
+        
+        response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result['choices'][0]['message']['content'].strip()
+        else:
+            return f"❌ API Hatası ({response.status_code}). Tekrar deneyin."
             
-            <div className="flex items-center space-x-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-500">{beastModeScore}%</div>
-                <div className="text-xs text-gray-500">Beast Mode</div>
-              </div>
-              
-              <button
-                onClick={() => {
-                  setCurrentUser(null);
-                  setShowLogin(true);
-                  setChatHistory([]);
-                  setExerciseLog([]);
-                }}
-                className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
-              >
-                <LogOut size={18} />
-                <span className="hidden sm:inline">Çıkış</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+    except Exception as e:
+        return f"❌ Bağlantı hatası: {str(e)}"
 
-      {/* Navigation Tabs */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            {[
-              { id: 'dashboard', label: '📊 Panel', icon: BarChart3 },
-              { id: 'coach', label: '🤖 Koç', icon: MessageCircle },
-              { id: 'exercises', label: '💪 Egzersizler', icon: Target },
-              { id: 'progress', label: '📈 İlerleme', icon: TrendingUp }
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition duration-200 ${
-                  activeTab === id
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon size={18} />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Tab */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Beast Mode Skoru</p>
-                    <p className="text-2xl font-bold text-orange-500">{beastModeScore}%</p>
-                  </div>
-                  <div className="text-3xl">🔥</div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Toplam Antrenman</p>
-                    <p className="text-2xl font-bold text-blue-500">{exerciseLog.length}</p>
-                  </div>
-                  <div className="text-3xl">💪</div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Bu Hafta</p>
-                    <p className="text-2xl font-bold text-green-500">
-                      {exerciseLog.filter(ex => {
-                        const exerciseDate = new Date(ex.date);
-                        const weekAgo = new Date();
-                        weekAgo.setDate(weekAgo.getDate() - 7);
-                        return exerciseDate >= weekAgo;
-                      }).length}
-                    </p>
-                  </div>
-                  <div className="text-3xl">📅</div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Güncel Kilo</p>
-                    <p className="text-2xl font-bold text-purple-500">{currentUser?.weight}kg</p>
-                  </div>
-                  <div className="text-3xl">⚖️</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Weekly Volume Chart */}
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Haftalık İlerleme</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={getWeeklyProgress()}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="volume" stroke="#FF6B35" strokeWidth={3} name="Toplam Volüm" />
-                    <Line type="monotone" dataKey="exercises" stroke="#4ECDC4" strokeWidth={2} name="Egzersiz Sayısı" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Muscle Group Distribution */}
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Kas Grubu Dağılımı</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={getMuscleGroupData()}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {getMuscleGroupData().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Coach Tab */}
-        {activeTab === 'coach' && (
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              {/* Chat Header */}
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">🤖 AI Koçun ile Konuş</h2>
-                <p className="text-gray-600 mt-1">Antrenman durumunu paylaş, sorular sor ve kişiselleştirilmiş tavsiyeler al!</p>
-              </div>
-
-              {/* Chat Messages */}
-              <div className="p-6 max-h-96 overflow-y-auto space-y-4">
-                {chatHistory.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="text-4xl mb-4">🦁</div>
-                    <p className="text-gray-500">Koçunla konuşmaya başla! Bugün nasılsın?</p>
-                  </div>
-                ) : (
-                  chatHistory.map((chat, index) => (
-                    <div key={index} className="space-y-3">
-                      {/* User message */}
-                      <div className="flex justify-end">
-                        <div className="bg-orange-500 text-white rounded-lg px-4 py-2 max-w-xs lg:max-w-md">
-                          <p className="text-sm">{chat.message}</p>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs opacity-75">
-                            <span className="text-xs opacity-75">{new Date(chat.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
-                            {chat.type === 'exercise' && <span className="text-xs opacity-75">💪</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* AI Response */}
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 text-gray-800 rounded-lg px-4 py-2 max-w-xs lg:max-w-md">
-                          <p className="text-sm">{chat.response}</p>
-                          <span className="text-xs text-gray-500 mt-1 block">🤖 AI Koç</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Chat Input */}
-              <div className="p-6 border-t border-gray-200">
-                <div className="flex space-x-3">
-                  <input
-                    type="text"
-                    value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
-                    placeholder="Mesajını yaz... (örn: 'Bugün 3 set 15 push-up yaptım' veya 'Çok yorgunum')"
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    disabled={loading}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleChatSubmit(e);
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={handleChatSubmit}
-                    disabled={loading || !chatMessage.trim()}
-                    className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition duration-200"
-                  >
-                    {loading ? '🔄' : '📤'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Exercises Tab */}
-        {activeTab === 'exercises' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">💪 Egzersiz Kayıtların</h2>
-              
-              {exerciseLog.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-4xl mb-4">🏃‍♂️</div>
-                  <p className="text-gray-500">Henüz egzersiz kaydın yok. Koçunla konuşarak başla!</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full table-auto">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Tarih</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Egzersiz</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Kas Grubu</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Set</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Tekrar</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Toplam</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {exerciseLog.map((exercise, index) => (
-                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-sm text-gray-600">
-                            {new Date(exercise.date).toLocaleDateString('tr-TR')}
-                          </td>
-                          <td className="py-3 px-4 text-sm font-medium text-gray-900 capitalize">
-                            {exercise.exercise}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">
-                            {beastModeData.muscleGroups[exercise.muscleGroup]}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{exercise.sets}</td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{exercise.reps}</td>
-                          <td className="py-3 px-4 text-sm font-semibold text-orange-600">
-                            {exercise.sets * exercise.reps}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Progress Tab */}
-        {activeTab === 'progress' && (
-          <div className="space-y-6">
-            {/* Progress Overview */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">📈 İlerleme Analizi</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="text-center p-4 bg-orange-50 rounded-lg">
-                  <div className="text-2xl font-bold text-orange-600">{exerciseLog.length}</div>
-                  <div className="text-sm text-gray-600">Toplam Egzersiz</div>
-                </div>
-                
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {exerciseLog.reduce((sum, ex) => sum + (ex.sets * ex.reps), 0)}
-                  </div>
-                  <div className="text-sm text-gray-600">Toplam Volüm</div>
-                </div>
-                
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{beastModeScore}%</div>
-                  <div className="text-sm text-gray-600">Beast Mode Skoru</div>
-                </div>
-              </div>
-
-              {/* Weekly Progress Chart */}
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Son 7 Günlük İlerleme</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={getWeeklyProgress()}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="volume" fill="#FF6B35" name="Günlük Volüm" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Goals and Achievements */}
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Hedefler ve Başarılar</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Haftalık Hedef</span>
-                      <span className="text-sm text-gray-500">5/7 gün</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-orange-500 h-2 rounded-full" style={{width: '71%'}}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Beast Mode</span>
-                      <span className="text-sm text-gray-500">{beastModeScore}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-red-500 h-2 rounded-full" style={{width: `${beastModeScore}%`}}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
+# Giriş/Kayıt Ekranı
+def login_page():
+    st.markdown("""
+    <div class="main-header">
+        <h1>🦁 Beast Mode Coach</h1>
+        <p>Kişisel Fitness Antrenörün</p>
     </div>
-  );
-};
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        tab1, tab2 = st.tabs(["🚀 Giriş Yap", "✨ Kayıt Ol"])
+        
+        with tab1:
+            with st.form("login_form"):
+                st.subheader("Giriş Yap")
+                username = st.text_input("Kullanıcı Adı")
+                password = st.text_input("Şifre", type="password")
+                login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
+                
+                if login_button:
+                    user = next((u for u in st.session_state.users 
+                               if u['username'] == username and u['password'] == password), None)
+                    
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.current_user = user
+                        st.session_state.exercise_log = user['exercise_history']
+                        st.session_state.chat_history = user.get('chat_history', [])
+                        st.success("✅ Giriş başarılı!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Kullanıcı adı veya şifre hatalı!")
+            
+            st.info("📝 Demo Hesap: Kullanıcı: han123 | Şifre: 123456")
+        
+        with tab2:
+            with st.form("register_form"):
+                st.subheader("Kayıt Ol")
+                name = st.text_input("Ad Soyad")
+                new_username = st.text_input("Kullanıcı Adı")
+                new_password = st.text_input("Şifre", type="password")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=70)
+                with col_b:
+                    age = st.number_input("Yaş", min_value=16, max_value=80, value=25)
+                
+                goal = st.selectbox("Hedef", [
+                    ("muscle_gain", "💪 Kas Kazanımı"),
+                    ("weight_loss", "🔥 Kilo Verme"),
+                    ("endurance", "🏃 Dayanıklılık"),
+                    ("strength", "⚡ Güç Artırımı")
+                ], format_func=lambda x: x[1])
+                
+                register_button = st.form_submit_button("✨ Kayıt Ol", use_container_width=True)
+                
+                if register_button:
+                    if name and new_username and new_password:
+                        new_user = {
+                            'id': len(st.session_state.users) + 1,
+                            'name': name,
+                            'username': new_username,
+                            'password': new_password,
+                            'weight': weight,
+                            'age': age,
+                            'goal': goal[0],
+                            'join_date': datetime.now(),
+                            'exercise_history': [],
+                            'chat_history': []
+                        }
+                        
+                        st.session_state.users.append(new_user)
+                        st.session_state.authenticated = True
+                        st.session_state.current_user = new_user
+                        st.session_state.exercise_log = []
+                        st.session_state.chat_history = []
+                        st.success("✅ Kayıt başarılı!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Lütfen tüm alanları doldurun!")
 
-export default BeastModeFitnessApp;
+# Ana Uygulama
+def main_app():
+    user = st.session_state.current_user
+    
+    # Header
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="font-size: 2rem;">🦁</span>
+            <div>
+                <h2 style="margin: 0;">Beast Mode Coach</h2>
+                <p style="margin: 0; color: #666;">Hoşgeldin, {user['name']}! 👋</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.metric("Beast Mode", f"{st.session_state.beast_mode_score}%", "🔥")
+    
+    with col3:
+        if st.button("🚪 Çıkış", use_container_width=True):
+            st.session_state.authenticated = False
+            st.session_state.current_user = None
+            st.rerun()
+    
+    st.divider()
+    
+    # Tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Panel", "🤖 Koç", "💪 Egzersizler", "📈 İlerleme"])
+    
+    with tab1:
+        dashboard_tab()
+    
+    with tab2:
+        coach_tab()
+    
+    with tab3:
+        exercises_tab()
+    
+    with tab4:
+        progress_tab()
+
+# Dashboard Tab
+def dashboard_tab():
+    # Metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Beast Mode Skoru", f"{st.session_state.beast_mode_score}%", "🔥")
+    
+    with col2:
+        st.metric("Toplam Antrenman", len(st.session_state.exercise_log), "💪")
+    
+    with col3:
+        week_ago = datetime.now() - timedelta(days=7)
+        weekly_exercises = sum(1 for ex in st.session_state.exercise_log 
+                             if datetime.strptime(ex['date'], '%Y-%m-%d') >= week_ago)
+        st.metric("Bu Hafta", weekly_exercises, "📅")
+    
+    with col4:
+        st.metric("Güncel Kilo", f"{st.session_state.current_user['weight']}kg", "⚖️")
+    
+    st.divider()
+    
+    # Charts
+    if st.session_state.exercise_log:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📊 Haftalık İlerleme")
+            weekly_data = get_weekly_progress()
+            if weekly_data:
+                fig = px.line(weekly_data, x='date', y='volume', 
+                            title="Günlük Egzersiz Volümü")
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.subheader("🎯 Kas Grubu Dağılımı")
+            muscle_data = get_muscle_group_data()
+            if muscle_data:
+                fig = px.pie(muscle_data, values='value', names='name',
+                           title="Kas Grubu Volüm Dağılımı")
+                st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("📈 Egzersiz geçmişin oluştukça grafikler burada görünecek!")
+
+# Coach Tab
+def coach_tab():
+    st.subheader("🤖 AI Koçun ile Konuş")
+    st.write("Antrenman durumunu paylaş, sorular sor ve kişiselleştirilmiş tavsiyeler al!")
+    
+    # Chat History
+    chat_container = st.container()
+    
+    with chat_container:
+        if not st.session_state.chat_history:
+            st.markdown("""
+            <div style="text-align: center; padding: 2rem;">
+                <div style="font-size: 3rem;">🦁</div>
+                <p style="color: #666;">Koçunla konuşmaya başla! Bugün nasılsın?</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            for chat in st.session_state.chat_history:
+                # User message
+                st.markdown(f"""
+                <div class="chat-message user-message">
+                    <p>{chat['message']}</p>
+                    <small>{datetime.fromisoformat(chat['date']).strftime('%H:%M')} 
+                    {'💪' if chat['type'] == 'exercise' else ''}</small>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # AI response
+                st.markdown(f"""
+                <div class="chat-message ai-message">
+                    <p>{chat['response']}</p>
+                    <small>🤖 AI Koç</small>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Chat Input
+    with st.form("chat_form", clear_on_submit=True):
+        message = st.text_area("Mesajını yaz...", 
+                              placeholder="örn: 'Bugün 3 set 15 push-up yaptım' veya 'Çok yorgunum'",
+                              height=100)
+        send_button = st.form_submit_button("📤 Gönder", use_container_width=True)
+        
+        if send_button and message.strip():
+            with st.spinner("🤖 AI Koç düşünüyor..."):
+                analysis = analyze_message(message)
+                ai_response = call_groq_api(message, analysis['type'], st.session_state.current_user)
+                
+                new_chat = {
+                    'id': len(st.session_state.chat_history) + 1,
+                    'date': datetime.now().isoformat(),
+                    'message': message,
+                    'response': ai_response,
+                    'type': analysis['type']
+                }
+                
+                st.session_state.chat_history.append(new_chat)
+                
+                # Egzersiz ise log'a ekle
+                if analysis['exercise_data']:
+                    new_exercise = {
+                        'id': len(st.session_state.exercise_log) + 1,
+                        'date': datetime.now().strftime('%Y-%m-%d'),
+                        **analysis['exercise_data']
+                    }
+                    st.session_state.exercise_log.append(new_exercise)
+                    
+                    # Beast Mode Score artır
+                    st.session_state.beast_mode_score = min(100, st.session_state.beast_mode_score + 2)
+                
+                st.rerun()
+
+# Exercises Tab
+def exercises_tab():
+    st.subheader("💪 Egzersiz Kayıtların")
+    
+    if not st.session_state.exercise_log:
+        st.markdown("""
+        <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 3rem;">🏃‍♂️</div>
+            <p style="color: #666;">Henüz egzersiz kaydın yok. Koçunla konuşarak başla!</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Egzersiz tablosu
+        df = pd.DataFrame(st.session_state.exercise_log)
+        df['Tarih'] = pd.to_datetime(df['date']).dt.strftime('%d.%m.%Y')
+        df['Egzersiz'] = df['exercise'].str.title()
+        df['Kas Grubu'] = df['muscle_group'].map(BEAST_MODE_DATA['muscle_groups'])
+        df['Set'] = df['sets']
+        df['Tekrar'] = df['reps']
+        df['Toplam'] = df['sets'] * df['reps']
+        
+        display_df = df[['Tarih', 'Egzersiz', 'Kas Grubu', 'Set', 'Tekrar', 'Toplam']]
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        # Özet istatistikler
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Toplam Egzersiz", len(df))
+        
+        with col2:
+            st.metric("Toplam Volüm", df['Toplam'].sum())
+        
+        with col3:
+            most_trained = df['Kas Grubu'].value_counts().index[0] if len(df) > 0 else "N/A"
+            st.metric("En Çok Çalışılan", most_trained)
+
+# Progress Tab
+def progress_tab():
+    st.subheader("📈 İlerleme Analizi")
+    
+    # Özet kartlar
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3 style="color: #FF6B35;">{}</h3>
+            <p>Toplam Egzersiz</p>
+        </div>
+        """.format(len(st.session_state.exercise_log)), unsafe_allow_html=True)
+    
+    with col2:
+        total_volume = sum(ex['sets'] * ex['reps'] for ex in st.session_state.exercise_log)
+        st.markdown("""
+        <div class="metric-card">
+            <h3 style="color: #4ECDC4;">{}</h3>
+            <p>Toplam Volüm</p>
+        </div>
+        """.format(total_volume), unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3 style="color: #45B7D1;">{}%</h3>
+            <p>Beast Mode Skoru</p>
+        </div>
+        """.format(st.session_state.beast_mode_score), unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # İlerleme grafikleri
+    if st.session_state.exercise_log:
+        # Haftalık ilerleme
+        st.subheader("Son 7 Günlük İlerleme")
+        weekly_data = get_weekly_progress()
+        if weekly_data:
+            fig = px.bar(weekly_data, x='date', y='volume',
+                        title="Günlük Egzersiz Volümü")
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Hedefler ve başarılar
+        st.subheader("🎯 Hedefler ve Başarılar")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Haftalık Hedef**: 5/7 gün")
+            progress_value = min(weekly_data[-1]['volume'] / 50 if weekly_data else 0, 1)
+            st.progress(progress_value)
+        
+        with col2:
+            st.write(f"**Beast Mode**: {st.session_state.beast_mode_score}%")
+            st.progress(st.session_state.beast_mode_score / 100)
+    else:
+        st.info("📊 Egzersiz geçmişin oluştukça ilerleme analizin burada görünecek!")
+
+# Yardımcı Fonksiyonlar
+def get_weekly_progress():
+    if not st.session_state.exercise_log:
+        return []
+    
+    weekly_data = []
+    for i in range(7):
+        date = datetime.now() - timedelta(days=6-i)
+        date_str = date.strftime('%Y-%m-%d')
+        
+        day_exercises = [ex for ex in st.session_state.exercise_log if ex['date'] == date_str]
+        total_volume = sum(ex['sets'] * ex['reps'] for ex in day_exercises)
+        
+        weekly_data.append({
+            'date': date.strftime('%d.%m'),
+            'volume': total_volume,
+            'exercises': len(day_exercises)
+        })
+    
+    return weekly_data
+
+def get_muscle_group_data():
+    if not st.session_state.exercise_log:
+        return []
+    
+    groups = {}
+    for exercise in st.session_state.exercise_log:
+        group = exercise['muscle_group']
+        groups[group] = groups.get(group, 0) + (exercise['sets'] * exercise['reps'])
+    
+    return [
+        {
+            'name': BEAST_MODE_DATA['muscle_groups'].get(group, group),
+            'value': volume
+        }
+        for group, volume in groups.items()
+    ]
+
+# Ana Uygulama Akışı
+def main():
+    init_session_state()
+    
+    if not st.session_state.authenticated:
+        login_page()
+    else:
+        main_app()
+
+if __name__ == "__main__":
+    main()
