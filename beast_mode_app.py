@@ -361,6 +361,7 @@ def login_page():
             st.success("✅ Demo hesap ile giriş başarılı!")
             time.sleep(1)
             st.rerun()
+            pass
 
         # Asıl kullanıcı girişi
         if login_button:
@@ -374,6 +375,7 @@ def login_page():
                 st.rerun()
             else:
                 st.error("❌ Kullanıcı adı veya şifre hatalı!")
+                pass
             
             st.info("📝 Demo: MongoDB bağlantısı yoksa test hesabı oluşturun")
         
