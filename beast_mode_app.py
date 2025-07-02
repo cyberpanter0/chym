@@ -337,45 +337,24 @@ def login_page():
         tab1, tab2 = st.tabs(["🚀 Giriş Yap", "✨ Kayıt Ol"])
         
         with tab1:
-    with st.form("login_form"):
-        st.subheader("Giriş Yap")
-        username = st.text_input("Kullanıcı Adı")
-        password = st.text_input("Şifre", type="password")
-        login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
-
-        # Demo kullanıcı girişi
-        if login_button and (username == "demo" and password == "demo"):
-            st.session_state.authenticated = True
-            st.session_state.current_user = {
-                '_id': "demo-id",
-                'name': "Demo Kullanıcı",
-                'username': "demo",
-                'password': "demo",
-                'weight': 70,
-                'age': 25,
-                'goal': 'muscle_gain',
-                'join_date': datetime.now(),
-                'beast_mode_score': 75
-            }
-            st.session_state.chat_history = []
-            st.success("✅ Demo hesap ile giriş başarılı!")
-            time.sleep(1)
-            st.rerun()
-            pass
-
-        # Asıl kullanıcı girişi
-        if login_button:
-            user = get_user_from_db(username, password)
-            if user:
-                st.session_state.authenticated = True
-                st.session_state.current_user = user
-                st.session_state.chat_history = get_user_chats(user['_id'])
-                st.success("✅ Giriş başarılı!")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.error("❌ Kullanıcı adı veya şifre hatalı!")
-                pass
+            with st.form("login_form"):
+                st.subheader("Giriş Yap")
+                username = st.text_input("Kullanıcı Adı")
+                password = st.text_input("Şifre", type="password")
+                login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
+                
+                if login_button:
+                    user = get_user_from_db(username, password)
+                    
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.current_user = user
+                        st.session_state.chat_history = get_user_chats(user['_id'])
+                        st.success("✅ Giriş başarılı!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Kullanıcı adı veya şifre hatalı!")
             
             st.info("📝 Demo: MongoDB bağlantısı yoksa test hesabı oluşturun")
         
