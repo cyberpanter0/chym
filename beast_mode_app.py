@@ -72,7 +72,7 @@ st.markdown("""
 # Sabitler
 GROQ_API_KEY = "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"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&ssl=true&ssl_cert_reqs=CERT_NONE&tlsAllowInvalidCertificates=true"
+MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 # Beast Mode Verileri - Düzeltilmiş
 BEAST_MODE_DATA = {
     'exercises': {
@@ -108,21 +108,33 @@ BEAST_MODE_DATA = {
 @st.cache_resource
 def init_mongodb():
     try:
+        # SSL ayarlarıyla client oluştur
         client = MongoClient(
             MONGODB_URI,
             ssl=True,
-            ssl_cert_reqs=ssl.CERT_NONE,  # ssl modülünü import etmeyi unutmayın
+            ssl_cert_reqs=ssl.CERT_NONE,
             tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=5000,
+            serverSelectionTimeoutMS=30000,
             connectTimeoutMS=20000,
-            socketTimeoutMS=20000
+            socketTimeoutMS=20000,
+            maxPoolSize=10,
+            retryWrites=True
         )
-        db = client['beast_mode']
+        
+        # Önce bağlantıyı test et
         client.admin.command('ping')
-        return db
+        print("MongoDB Atlas bağlantısı başarılı!")
+        
+        # beast_mode database'ini oluştur (henüz mevcut değilse)
+        db = client['beast_mode']
+        
+        return client, db
+    
     except Exception as e:
         st.error(f"MongoDB bağlantı hatası: {e}")
-        return None
+        print(f"Detaylı hata: {e}")
+        return None, None
+
 
 # Session State
 def init_session_state():
