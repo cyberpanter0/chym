@@ -627,19 +627,16 @@ const BeastModeFitnessApp = () => {
                           <p className="text-sm">{chat.message}</p>
                           <div className="flex items-center justify-between mt-1">
                             <span className="text-xs opacity-75">
-                              {chat.type === 'exercise' ? '💪 Egzersiz' : '💭 Genel'}
-                            </span>
-                            <span className="text-xs opacity-75">
-                              {new Date(chat.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                            <span className="text-xs opacity-75">{new Date(chat.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            {chat.type === 'exercise' && <span className="text-xs opacity-75">💪</span>}
                           </div>
                         </div>
                       </div>
 
-                      {/* AI response */}
+                      {/* AI Response */}
                       <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg px-4 py-2 max-w-xs lg:max-w-md">
-                          <p className="text-sm text-gray-800">{chat.response}</p>
+                        <div className="bg-gray-100 text-gray-800 rounded-lg px-4 py-2 max-w-xs lg:max-w-md">
+                          <p className="text-sm">{chat.response}</p>
                           <span className="text-xs text-gray-500 mt-1 block">🤖 AI Koç</span>
                         </div>
                       </div>
@@ -655,30 +652,23 @@ const BeastModeFitnessApp = () => {
                     type="text"
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
-                    placeholder="Örn: Bugün 20 push-up 3 set yaptım! veya Çok yorgunum..."
+                    placeholder="Mesajını yaz... (örn: 'Bugün 3 set 15 push-up yaptım' veya 'Çok yorgunum')"
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     disabled={loading}
-                    onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit(e)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleChatSubmit(e);
+                      }
+                    }}
                   />
                   <button
                     onClick={handleChatSubmit}
                     disabled={loading || !chatMessage.trim()}
-                    className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition duration-200"
                   >
-                    {loading ? '⏳' : '📤'}
+                    {loading ? '🔄' : '📤'}
                   </button>
-                </div>
-                
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {['Bugün nasılım?', '20 push-up yaptım', 'Motivasyon lazım', 'Beslenme tavsiyen var mı?'].map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => setChatMessage(suggestion)}
-                      className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition duration-200"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
                 </div>
               </div>
             </div>
@@ -689,64 +679,28 @@ const BeastModeFitnessApp = () => {
         {activeTab === 'exercises' && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">💪 Egzersiz Kütüphanesi</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">💪 Egzersiz Kayıtların</h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(beastModeData.exercises).map(([exercise, data]) => (
-                  <div key={exercise} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition duration-200">
-                    <h3 className="font-semibold text-gray-900 capitalize mb-2">{exercise}</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Kas Grubu:</span>
-                        <span className="text-sm font-medium">{beastModeData.muscleGroups[data.muscleGroup]}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Zorluk:</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          data.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                          data.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {data.difficulty === 'beginner' ? 'Başlangıç' :
-                           data.difficulty === 'intermediate' ? 'Orta' : 'İleri'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Recent Exercises */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">📋 Son Egzersizlerin</h2>
-                <button className="flex items-center space-x-1 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition duration-200">
-                  <Plus size={16} />
-                  <span>Egzersiz Ekle</span>
-                </button>
-              </div>
-
               {exerciseLog.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-4xl mb-4">🏋️</div>
+                  <div className="text-4xl mb-4">🏃‍♂️</div>
                   <p className="text-gray-500">Henüz egzersiz kaydın yok. Koçunla konuşarak başla!</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full table-auto">
                     <thead>
                       <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 font-medium text-gray-600">Tarih</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-600">Egzersiz</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-600">Set</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-600">Tekrar</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-600">Kas Grubu</th>
-                        <th className="text-left py-3 px-4 font-medium text-gray-600">Volüm</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Tarih</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Egzersiz</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Kas Grubu</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Set</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Tekrar</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Toplam</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {exerciseLog.slice().reverse().map((exercise, index) => (
+                      {exerciseLog.map((exercise, index) => (
                         <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-3 px-4 text-sm text-gray-600">
                             {new Date(exercise.date).toLocaleDateString('tr-TR')}
@@ -754,14 +708,12 @@ const BeastModeFitnessApp = () => {
                           <td className="py-3 px-4 text-sm font-medium text-gray-900 capitalize">
                             {exercise.exercise}
                           </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            {beastModeData.muscleGroups[exercise.muscleGroup]}
+                          </td>
                           <td className="py-3 px-4 text-sm text-gray-600">{exercise.sets}</td>
                           <td className="py-3 px-4 text-sm text-gray-600">{exercise.reps}</td>
-                          <td className="py-3 px-4 text-sm">
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                              {beastModeData.muscleGroups[exercise.muscleGroup]}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-sm font-medium text-orange-600">
+                          <td className="py-3 px-4 text-sm font-semibold text-orange-600">
                             {exercise.sets * exercise.reps}
                           </td>
                         </tr>
@@ -781,152 +733,64 @@ const BeastModeFitnessApp = () => {
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900 mb-6">📈 İlerleme Analizi</h2>
               
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Beast Mode Score Progress */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">🔥 Beast Mode Skoru</h3>
-                  <div className="relative">
-                    <div className="w-full bg-gray-200 rounded-full h-4">
-                      <div 
-                        className="bg-gradient-to-r from-orange-400 to-red-500 h-4 rounded-full transition-all duration-500"
-                        style={{ width: `${beastModeScore}%` }}
-                      ></div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">{exerciseLog.length}</div>
+                  <div className="text-sm text-gray-600">Toplam Egzersiz</div>
+                </div>
+                
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {exerciseLog.reduce((sum, ex) => sum + (ex.sets * ex.reps), 0)}
+                  </div>
+                  <div className="text-sm text-gray-600">Toplam Volüm</div>
+                </div>
+                
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{beastModeScore}%</div>
+                  <div className="text-sm text-gray-600">Beast Mode Skoru</div>
+                </div>
+              </div>
+
+              {/* Weekly Progress Chart */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Son 7 Günlük İlerleme</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={getWeeklyProgress()}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="volume" fill="#FF6B35" name="Günlük Volüm" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Goals and Achievements */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Hedefler ve Başarılar</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Haftalık Hedef</span>
+                      <span className="text-sm text-gray-500">5/7 gün</span>
                     </div>
-                    <div className="flex justify-between text-sm text-gray-600 mt-1">
-                      <span>0%</span>
-                      <span className="font-bold text-orange-600">{beastModeScore}%</span>
-                      <span>100%</span>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="bg-orange-500 h-2 rounded-full" style={{width: '71%'}}></div>
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div className="text-center p-3 bg-orange-50 rounded-lg">
-                      <div className="text-2xl font-bold text-orange-600">{exerciseLog.length}</div>
-                      <div className="text-sm text-gray-600">Toplam Egzersiz</div>
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Beast Mode</span>
+                      <span className="text-sm text-gray-500">{beastModeScore}%</span>
                     </div>
-                    <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {Math.floor((Date.now() - new Date(currentUser?.joinDate).getTime()) / (1000 * 60 * 60 * 24))}
-                      </div>
-                      <div className="text-sm text-gray-600">Gün Aktif</div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="bg-red-500 h-2 rounded-full" style={{width: `${beastModeScore}%`}}></div>
                     </div>
                   </div>
                 </div>
-
-                {/* Weekly Summary */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">📅 Bu Hafta</h3>
-                  <div className="space-y-3">
-                    {getWeeklyProgress().map((day, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm font-medium text-gray-700">{day.date}</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-600">{day.exercises} egzersiz</span>
-                          <div className="w-16 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-green-500 h-2 rounded-full"
-                              style={{ width: `${Math.min(100, (day.volume / 50) * 100)}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Detailed Charts */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Detaylı İstatistikler</h3>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Volume by Muscle Group */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-700 mb-3">Kas Grubu Performansı</h4>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={getMuscleGroupData()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#FF6B35" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Exercise Distribution */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-700 mb-3">Egzersiz Dağılımı</h4>
-                  <div className="space-y-2">
-                    {Object.entries(
-                      exerciseLog.reduce((acc, ex) => {
-                        acc[ex.exercise] = (acc[ex.exercise] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([exercise, count]) => (
-                      <div key={exercise} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm font-medium capitalize">{exercise}</span>
-                        <span className="text-sm text-gray-600">{count} kez</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Achievement Badges */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">🏆 Başarılarım</h3>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { 
-                    icon: '🔥', 
-                    title: 'İlk Adım', 
-                    desc: 'İlk egzersizini tamamladın',
-                    earned: exerciseLog.length > 0
-                  },
-                  { 
-                    icon: '💪', 
-                    title: 'Güçlü Başlangıç', 
-                    desc: '5 egzersiz tamamladın',
-                    earned: exerciseLog.length >= 5
-                  },
-                  { 
-                    icon: '🎯', 
-                    title: 'Odaklanmış', 
-                    desc: 'Aynı kas grubunda 3 egzersiz',
-                    earned: Object.values(
-                      exerciseLog.reduce((acc, ex) => {
-                        acc[ex.muscleGroup] = (acc[ex.muscleGroup] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).some(count => count >= 3)
-                  },
-                  { 
-                    icon: '🦁', 
-                    title: 'Beast Mode', 
-                    desc: '%80 Beast Mode skoruna ulaştın',
-                    earned: beastModeScore >= 80
-                  }
-                ].map((badge, index) => (
-                  <div 
-                    key={index} 
-                    className={`text-center p-4 rounded-lg border-2 transition duration-200 ${
-                      badge.earned 
-                        ? 'border-yellow-300 bg-yellow-50' 
-                        : 'border-gray-200 bg-gray-50 opacity-50'
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{badge.icon}</div>
-                    <h4 className="font-medium text-gray-900 text-sm">{badge.title}</h4>
-                    <p className="text-xs text-gray-600 mt-1">{badge.desc}</p>
-                    {badge.earned && (
-                      <div className="text-xs text-yellow-600 font-medium mt-2">✓ Kazanıldı</div>
-                    )}
-                  </div>
-                ))}
               </div>
             </div>
           </div>
