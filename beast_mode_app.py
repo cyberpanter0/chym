@@ -108,7 +108,15 @@ BEAST_MODE_DATA = {
 @st.cache_resource
 def init_mongodb():
     try:
-        client = MongoClient(MONGODB_URI)
+        client = MongoClient(
+            MONGODB_URI,
+            ssl=True,
+            ssl_cert_reqs=ssl.CERT_NONE,  # ssl modülünü import etmeyi unutmayın
+            tlsAllowInvalidCertificates=True,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=20000,
+            socketTimeoutMS=20000
+        )
         db = client['beast_mode']
         client.admin.command('ping')
         return db
