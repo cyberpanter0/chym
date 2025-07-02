@@ -129,7 +129,11 @@ def init_mongodb():
         db = client['beast_mode']
         
         return client, db
-
+    
+    except Exception as e:
+        st.error(f"MongoDB bağlantı hatası: {e}")
+        print(f"Detaylı hata: {e}")
+        return None, None
 
 # Session State
 def init_session_state():
