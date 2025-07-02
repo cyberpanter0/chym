@@ -108,12 +108,12 @@ BEAST_MODE_DATA = {
 @st.cache_resource
 def init_mongodb():
     try:
-        # SSL ayarlarıyla client oluştur
+        # Yeni PyMongo sürümü için SSL ayarları
         client = MongoClient(
             MONGODB_URI,
-            ssl=True,
-            ssl_cert_reqs=ssl.CERT_NONE,
+            tls=True,  # ssl yerine tls kullanın
             tlsAllowInvalidCertificates=True,
+            tlsInsecure=True,  # Sertifika doğrulamasını atla
             serverSelectionTimeoutMS=30000,
             connectTimeoutMS=20000,
             socketTimeoutMS=20000,
@@ -129,11 +129,6 @@ def init_mongodb():
         db = client['beast_mode']
         
         return client, db
-    
-    except Exception as e:
-        st.error(f"MongoDB bağlantı hatası: {e}")
-        print(f"Detaylı hata: {e}")
-        return None, None
 
 
 # Session State
