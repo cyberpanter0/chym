@@ -345,7 +345,25 @@ def login_page():
                 
                 if login_button:
                     user = get_user_from_db(username, password)
-                    
+                     # Demo kullanıcı girişi
+        if login_button and (username == "demo" and password == "demo"):
+            st.session_state.authenticated = True
+            st.session_state.current_user = {
+                '_id': "demo-id",
+                'name': "Demo Kullanıcı",
+                'username': "demo",
+                'password': "demo",
+                'weight': 70,
+                'age': 25,
+                'goal': 'muscle_gain',
+                'join_date': datetime.now(),
+                'beast_mode_score': 75
+            }
+            st.session_state.chat_history = []
+            st.success("✅ Demo hesap ile giriş başarılı!")
+            time.sleep(1)
+            st.rerun()
+ 
                     if user:
                         st.session_state.authenticated = True
                         st.session_state.current_user = user
