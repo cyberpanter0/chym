@@ -11,3 +11,4 @@ gdown
 fire
 fake-useragent
 pymongo
+ssl
