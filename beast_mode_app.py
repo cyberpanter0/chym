@@ -1,3 +1,4 @@
+import ssl
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,7 +10,6 @@ import time
 import pymongo
 from pymongo import MongoClient
 import uuid
-
 # Sayfa konfigürasyonu
 st.set_page_config(
     page_title="🦁 Beast Mode Coach",
