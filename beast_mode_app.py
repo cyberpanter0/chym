@@ -504,8 +504,8 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': f"{message}\n{conversation_context}"}
             ],
-                'temperature': 0.7,
-                'max_tokens': 200
+                'temperature': 0.9,
+                'max_tokens': 500
         }
 
         response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=15)
