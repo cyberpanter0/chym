@@ -464,7 +464,8 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             f"Sen {user_data['name']} adlı kişinin kişisel fitness koçusun. "
             f"Samimi, arkadaşça ve motive edici konuş. Robot gibi değil, gerçek bir insan gibi davran. "
             f"emoji kullan, esprili ol. "
-            f"Küfür serbest koç gibi ama bir abi ol. "
+            f"öğrencin önemli şeyler hakkında birşey sorduğunda bilimsel olarak düşün ama ona normalce anlat. "
+            f"Ciddi ama samimi ol. "
             f"Kullanıcı bilgileri: {user_data['age']} yaşında, {user_data['weight']}kg, Beast Mode skoru: %{st.session_state.beast_mode_score}"
         )
         
@@ -490,7 +491,7 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             system_prompt = (
                 f"{base_personality}\n\n"
                 "Genel sohbet ediyorsunuz. Rahat ol, arkadaşça konuş. "
-                "Merak et, soru sor. Max 70 kelime."
+                "Merak et, soru sor"
             )
 
         headers = {
