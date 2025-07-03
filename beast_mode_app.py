@@ -278,21 +278,21 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
                 conversation_context += f"Kullanıcı: {chat['message']}\nKoç: {chat['response']}\n\n"
         
         if message_type == 'exercise':
-            system_prompt = f"""Sen profesyonel bir fitness koçusun. Samimi ve motive edici konuş, robot gibi değil.
-                           Kullanıcı: {user_data['name']}, Kilo: {user_data['weight']}kg, Yaş: {user_data['age']}, Beast Mode: %{st.session_state.beast_mode_score}
-                           
-                           Kullanıcı mesajı: "{message}"
-                           {conversation_context}
-                           
-                           Kısa (max 80 kelime), samimi ve motive edici Türkçe yanıt ver. Teknik tavsiye ekle."""
+            system_prompt = (
+                f"Sen profesyonel bir fitness koçusun. Samimi ve motive edici konuş, robot gibi değil.\n"
+                f"Kullanıcı: {user_data['name']}, Kilo: {user_data['weight']}kg, Yaş: {user_data['age']}, Beast Mode: %{st.session_state.beast_mode_score}\n\n"
+                f"Kullanıcı mesajı: \"{message}\"\n"
+                f"{conversation_context}\n\n"
+                "Kısa (max 80 kelime), samimi ve motive edici Türkçe yanıt ver. Teknik tavsiye ekle."
+            )
         else:
-            system_prompt = f"""Sen profesyonel bir fitness koçusun. Samimi ve destekleyici konuş.
-                           Kullanıcı: {user_data['name']}, Beast Mode: %{st.session_state.beast_mode_score}
-                           
-                           Kullanıcı mesajı: "{message}"
-                           {conversation_context}
-                           
-                           Kısa (max 70 kelime), samimi Türkçe yanıt ver. Soru sor ve tavsiye ver."""
+            system_prompt = (
+                f"Sen profesyonel bir fitness koçusun. Samimi ve destekleyici konuş.\n"
+                f"Kullanıcı: {user_data['name']}, Beast Mode: %{st.session_state.beast_mode_score}\n\n"
+                f"Kullanıcı mesajı: \"{message}\"\n"
+                f"{conversation_context}\n\n"
+                "Kısa (max 70 kelime), samimi Türkçe yanıt ver. Soru sor ve tavsiye ver."
+            )
 
         headers = {
             'Authorization': f'Bearer {GROQ_API_KEY}',
@@ -305,7 +305,7 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             'temperature': 0.8,
             'max_tokens': 200
         }
-        
+
         response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=10)
         
         if response.status_code == 200:
@@ -313,6 +313,9 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             return result['choices'][0]['message']['content'].strip()
         else:
             return f"❌ API Hatası ({response.status_code}). Tekrar deneyin."
+            
+    except Exception as e:
+        return f"❌ Bağlantı hatası: {str(e)}"
             
     except Exception as e:
         return f"❌ Bağlantı hatası: {str(e)}"
