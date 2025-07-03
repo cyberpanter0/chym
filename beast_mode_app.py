@@ -202,11 +202,6 @@ def init_mongodb():
 def create_offline_db():
     """Offline demo veritabanı oluştur"""
     st.warning("⚠️ MongoDB bağlantısı başarısız - Offline demo modunda çalışıyor")
-    return {
-        'demo': True,
-        'users': [],
-        'chats': [],
-        'exercises': []
 
 def setup_collections(db):
     """MongoDB koleksiyonlarını ve index'lerini ayarla"""
