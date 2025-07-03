@@ -131,7 +131,7 @@ def init_mongodb():
         print(f"Detaylı hata: {e}")
         return None, None
 
-if username == "demo" and password == "demo":
+        if username == "demo" and password == "demo":
             return {
                 '_id': "demo-user",
                 'name': "Demo Kullanıcı",
