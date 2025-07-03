@@ -463,7 +463,8 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
         base_personality = (
             f"Sen {user_data['name']} adlı kişinin kişisel fitness koçusun. "
             f"Samimi, arkadaşça ve motive edici konuş. Robot gibi değil, gerçek bir insan gibi davran. "
-            f"Kısa cümleler kur, emoji kullan, esprili ol. "
+            f"emoji kullan, esprili ol. "
+            f"Küfür serbest koç gibi ama bir abi ol. "
             f"Kullanıcı bilgileri: {user_data['age']} yaşında, {user_data['weight']}kg, Beast Mode skoru: %{st.session_state.beast_mode_score}"
         )
         
@@ -471,19 +472,19 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             system_prompt = (
                 f"{base_personality}\n\n"
                 "Antrenman konusunda konuşuyorsunuz. Teknik bilgi ver ama sıkıcı olma. "
-                "Kişisel deneyimlerini paylaşıyormuş gibi konuş. Max 60 kelime."
+                "Kişisel deneyimlerini paylaşıyormuş gibi konuş."
             )
         elif message_type == 'nutrition':
             system_prompt = (
                 f"{base_personality}\n\n"
-                "Beslenme konusunda konuşuyorsunuz. Pratik tavsiyeler ver, ezber bilgi verme. "
-                "Gerçek hayattan örnekler kullan. Max 70 kelime."
+                "Beslenme konusunda konuşuyorsunuz. Pratik tavsiyeler ver, ezber bilgi verme. samimi davran "
+                "Gerçek hayattan örnekler kullan."
             )
         elif message_type == 'motivation':
             system_prompt = (
                 f"{base_personality}\n\n"
                 "Motivasyon konusunda konuşuyorsunuz. Empati kurup destekle. "
-                "Kendi zorlandığın anlardan bahset. Samimi ol. Max 80 kelime."
+                "Kendi zorlandığın anlardan bahset. Samimi ol."
             )
         else:
             system_prompt = (
@@ -498,13 +499,13 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
         }
         
         data = {
-            'model': 'llama-3.3-70b-versatile',
+            'model': 'qwen/qwen3-32b',
             'messages': [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': f"{message}\n{conversation_context}"}
             ],
-            'temperature': 0.9,
-            'max_tokens': 150
+                'temperature': 0.7,
+                'max_tokens': 200
         }
 
         response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=15)
@@ -517,16 +518,6 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             
     except Exception as e:
         return get_fallback_response(message_type)
-
-def get_fallback_response(message_type):
-    """API hatası durumunda fallback yanıt"""
-    fallback_responses = {
-        'exercise': "Antrenman konusunda konuşalım! Hangi egzersizde zorlanıyorsun? 💪",
-        'nutrition': "Beslenme çok önemli! Bugün ne yedin, nasıl hissediyorsun? 🍎",
-        'motivation': "Hey, bazen herkes zorlanır. Bu normal! Beraber çözeriz 🦁",
-        'general': "Merhaba! Nasıl gidiyor bugün? Sana nasıl yardım edebilirim? 😊"
-    }
-    return fallback_responses.get(message_type, "Tekrar dener misin? 🤔")
 
 # Giriş/Kayıt Ekranı
 def login_page():
