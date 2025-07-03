@@ -509,7 +509,7 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             'max_tokens': 500           # Kısa ve hızlı yanıtlar için
         }
 
-        response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=15)
+    response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=7)  # timeout kısaltıldı
         
         if response.status_code == 200:
             result = response.json()
