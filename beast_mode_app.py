@@ -170,6 +170,7 @@ def verify_password(password, hashed_password):
 
 # MongoDB Bağlantısı
 # MongoDB Bağlantısı (Düzeltilmiş)
+# MongoDB Bağlantısı (Düzeltilmiş)
 @st.cache_resource
 def init_mongodb():
     try:
@@ -177,13 +178,23 @@ def init_mongodb():
             MONGODB_URI,
             tls=True,
             tlsAllowInvalidCertificates=True,
-            ssl_version=ssl.PROTOCOL_TLSv1_2,  # TLS 1.2 kullanacak şekilde eklendi
             serverSelectionTimeoutMS=10000,
             connectTimeoutMS=10000,
             socketTimeoutMS=10000,
             maxPoolSize=10,
             retryWrites=True
         )
+        
+        # Test bağlantısı
+        client.admin.command('ping')
+        db = client['beast_mode_coach']
+        
+        setup_collections(db)
+        
+        return db
+    except Exception as e:
+        st.error(f"❌ MongoDB bağlantı hatası: {e}")
+        return None
         
         # Test bağlantısı
         client.admin.command('ping')
