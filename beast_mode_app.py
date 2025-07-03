@@ -500,13 +500,13 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
         }
         
         data = {
-            'model': 'llama3-8b-8192',  # Daha hızlı ve yeterli model adı
+            'model': 'gemma2-9b-it',  # Daha hızlı ve yeterli model adı
             'messages': [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': f"{message}\n{conversation_context}"}
             ],
-            'temperature': 0.7,         # Daha tutarlı ve hızlı
-            'max_tokens': 200           # Kısa ve hızlı yanıtlar için
+            'temperature': 0.8,         # Daha tutarlı ve hızlı
+            'max_tokens': 500           # Kısa ve hızlı yanıtlar için
         }
 
         response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=15)
