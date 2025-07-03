@@ -130,6 +130,20 @@ def init_mongodb():
         st.error(f"MongoDB bağlantı hatası: {e}")
         print(f"Detaylı hata: {e}")
         return None, None
+
+if username == "demo" and password == "demo":
+            return {
+                '_id': "demo-user",
+                'name': "Demo Kullanıcı",
+                'username': "demo",
+                'password': "demo",
+                'weight': 70,
+                'age': 25,
+                'goal': "muscle_gain",
+                'join_date': datetime.now(),
+                'beast_mode_score': 75
+            }
+        return None
 # Session State
 def init_session_state():
     if 'authenticated' not in st.session_state:
