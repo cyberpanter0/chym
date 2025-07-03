@@ -126,7 +126,7 @@ def init_mongodb():
         st.error(f"❌ MongoDB bağlantı hatası: {e}")
         return None
 
-        def get_user_from_db(username, password):
+def get_user_from_db(username, password):
     if st.session_state.db:
         try:
             user = st.session_state.db.users.find_one({
