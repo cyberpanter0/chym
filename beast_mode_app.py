@@ -10,6 +10,8 @@ import time
 import pymongo
 from pymongo import MongoClient
 import uuid
+import re
+
 # Sayfa konfigürasyonu
 st.set_page_config(
     page_title="🦁 Beast Mode Coach",
@@ -73,7 +75,8 @@ st.markdown("""
 GROQ_API_KEY = "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"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-# Beast Mode Verileri - Düzeltilmiş
+
+# Beast Mode Verileri
 BEAST_MODE_DATA = {
     'exercises': {
         'pike push-up': {'muscle_group': 'shoulders', 'difficulty': 'intermediate'},
@@ -103,83 +106,6 @@ BEAST_MODE_DATA = {
         'full_body': '🎯 Tüm Vücut'
     }
 }
-
-# MongoDB Bağlantısı
-@st.cache_resource
-def init_mongodb():
-    try:
-        client = MongoClient(
-            MONGODB_URI,
-            tls=True,
-            tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=30000,
-            connectTimeoutMS=20000,
-            socketTimeoutMS=20000,
-            maxPoolSize=10,
-            retryWrites=True
-        )
-        client.admin.command('ping')
-        st.success("✅ MongoDB Atlas bağlantısı başarılı!")
-        db = client['beast_mode']
-        return db
-    except Exception as e:
-        st.error(f"❌ MongoDB bağlantı hatası: {e}")
-        return None
-
-def init_session_state():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'current_user' not in st.session_state:
-        st.session_state.current_user = None
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    if 'exercise_log' not in st.session_state:
-        st.session_state.exercise_log = []
-    if 'beast_mode_score' not in st.session_state:
-        st.session_state.beast_mode_score = 75
-    if 'db' not in st.session_state:
-        st.session_state.db = init_mongodb()
-
-def get_user_from_db(username, password):
-    if st.session_state.db:
-        try:
-            user = st.session_state.db.users.find_one({
-                'username': username, 
-                'password': password
-            })
-            return user
-        except Exception as e:
-            st.error(f"Giriş hatası: {e}")
-            return None
-    else:
-        # OFFLINE DEMO MODE
-        if username == "demo" and password == "demo":
-            return {
-                '_id': "demo-user",
-                'name': "Demo Kullanıcı",
-                'username': "demo",
-                'password': "demo",
-                'weight': 70,
-                'age': 25,
-                'goal': "muscle_gain",
-                'join_date': datetime.now(),
-                'beast_mode_score': 75
-            }
-        return None
-# Session State
-def init_session_state():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'current_user' not in st.session_state:
-        st.session_state.current_user = None
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    if 'exercise_log' not in st.session_state:
-        st.session_state.exercise_log = []
-    if 'beast_mode_score' not in st.session_state:
-        st.session_state.beast_mode_score = 75
-    if 'db' not in st.session_state:
-        st.session_state.db = init_mongodb()
 
 # Günlük Program
 DAILY_PROGRAM = {
@@ -229,7 +155,105 @@ SUPPLEMENTS = [
     {'name': 'D3 Vitamini', 'dosage': '2000 IU'}
 ]
 
-# Mesaj Analizi - Düzeltilmiş
+# MongoDB Bağlantısı
+@st.cache_resource
+def init_mongodb():
+    try:
+        client = MongoClient(
+            MONGODB_URI,
+            tls=True,
+            tlsAllowInvalidCertificates=True,
+            serverSelectionTimeoutMS=30000,
+            connectTimeoutMS=20000,
+            socketTimeoutMS=20000,
+            maxPoolSize=10,
+            retryWrites=True
+        )
+        client.admin.command('ping')
+        st.success("✅ MongoDB Atlas bağlantısı başarılı!")
+        db = client['beast_mode']
+        return db
+    except Exception as e:
+        st.error(f"❌ MongoDB bağlantı hatası: {e}")
+        return None
+
+# Session State Initialization
+def init_session_state():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'current_user' not in st.session_state:
+        st.session_state.current_user = None
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'exercise_log' not in st.session_state:
+        st.session_state.exercise_log = []
+    if 'beast_mode_score' not in st.session_state:
+        st.session_state.beast_mode_score = 75
+    if 'db' not in st.session_state:
+        st.session_state.db = init_mongodb()
+
+# MongoDB İşlemleri
+def save_user_to_db(user_data):
+    if st.session_state.db:
+        try:
+            st.session_state.db.users.insert_one(user_data)
+            return True
+        except Exception as e:
+            st.error(f"Kayıt hatası: {e}")
+            return False
+    return False
+
+def get_user_from_db(username, password):
+    if st.session_state.db:
+        try:
+            user = st.session_state.db.users.find_one({
+                'username': username, 
+                'password': password
+            })
+            return user
+        except Exception as e:
+            st.error(f"Giriş hatası: {e}")
+            return None
+    else:
+        # OFFLINE DEMO MODE
+        if username == "demo" and password == "demo":
+            return {
+                '_id': "demo-user",
+                'name': "Demo Kullanıcı",
+                'username': "demo",
+                'password': "demo",
+                'weight': 70,
+                'age': 25,
+                'goal': "muscle_gain",
+                'join_date': datetime.now(),
+                'beast_mode_score': 75
+            }
+        return None
+
+def save_chat_to_db(user_id, chat_data):
+    if st.session_state.db:
+        try:
+            st.session_state.db.chats.insert_one({
+                'user_id': user_id,
+                'timestamp': datetime.now(),
+                **chat_data
+            })
+        except Exception as e:
+            st.error(f"Chat kayıt hatası: {e}")
+
+def get_user_chats(user_id):
+    if st.session_state.db:
+        try:
+            chats = list(st.session_state.db.chats.find(
+                {'user_id': user_id}
+            ).sort('timestamp', -1).limit(10))
+            return chats
+        except Exception as e:
+            st.error(f"Chat yükleme hatası: {e}")
+            return []
+    return []
+
+# Mesaj Analizi
 def analyze_message(message):
     exercise_keywords = ['antrenman', 'egzersiz', 'set', 'tekrar', 'squat', 'push-up', 'pull-up', 'plank', 'burpee']
     general_keywords = ['yorgun', 'motivasyon', 'nasılım', 'hissediyorum', 'uyku', 'beslenme']
@@ -250,7 +274,6 @@ def analyze_message(message):
                 break
         
         if found_exercise:
-            import re
             set_match = re.search(r'(\d+)\s*set', message_lower)
             rep_match = re.search(r'(\d+)\s*tekrar', message_lower)
             
@@ -317,56 +340,6 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
             
     except Exception as e:
         return f"❌ Bağlantı hatası: {str(e)}"
-            
-    except Exception as e:
-        return f"❌ Bağlantı hatası: {str(e)}"
-
-# MongoDB İşlemleri
-def save_user_to_db(user_data):
-    if st.session_state.db:
-        try:
-            st.session_state.db.users.insert_one(user_data)
-            return True
-        except Exception as e:
-            st.error(f"Kayıt hatası: {e}")
-            return False
-    return False
-
-def get_user_from_db(username, password):
-    if st.session_state.db:
-        try:
-            user = st.session_state.db.users.find_one({
-                'username': username, 
-                'password': password
-            })
-            return user
-        except Exception as e:
-            st.error(f"Giriş hatası: {e}")
-            return None
-    return None
-
-def save_chat_to_db(user_id, chat_data):
-    if st.session_state.db:
-        try:
-            st.session_state.db.chats.insert_one({
-                'user_id': user_id,
-                'timestamp': datetime.now(),
-                **chat_data
-            })
-        except Exception as e:
-            st.error(f"Chat kayıt hatası: {e}")
-
-def get_user_chats(user_id):
-    if st.session_state.db:
-        try:
-            chats = list(st.session_state.db.chats.find(
-                {'user_id': user_id}
-            ).sort('timestamp', -1).limit(10))
-            return chats
-        except Exception as e:
-            st.error(f"Chat yükleme hatası: {e}")
-            return []
-    return []
 
 # Giriş/Kayıt Ekranı
 def login_page():
@@ -381,7 +354,7 @@ def login_page():
     if st.session_state.db:
         st.success("✅ MongoDB bağlantısı aktif")
     else:
-        st.error("❌ MongoDB bağlantısı başarısız - Offline modda çalışıyor")
+        st.warning("⚠️ MongoDB bağlantısı başarısız - Offline demo modunda çalışıyor")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -393,44 +366,45 @@ def login_page():
                 st.subheader("Giriş Yap")
                 username = st.text_input("Kullanıcı Adı")
                 password = st.text_input("Şifre", type="password")
-                login_button = st.form_submit_button("Giriş Yap")
-                    
-                            user = None
-                if login_button:
-                    user = get_user_from_db(username, password)
-            
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.current_user = user
-                    st.session_state.chat_history = get_user_chats(user['_id'])
-                    st.success("✅ Giriş başarılı!")
-                    time.sleep(1)
-                    st.rerun()
-                elif login_button:
-                    st.error("❌ Kullanıcı adı veya şifre hatalı!")
+                login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
                 
-                elif login_button:
-                    with tab2:
-                        with st.form("register_form"):
-                            st.subheader("Kayıt Ol")
-                            name = st.text_input("Ad Soyad")
-                            new_username = st.text_input("Kullanıcı Adı")
-                            new_password = st.text_input("Şifre", type="password")
-                            
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=70)
-                            with col_b:
-                                age = st.number_input("Yaş", min_value=16, max_value=80, value=25)
-                            
-                            goal = st.selectbox("Hedef", [
-                                "muscle_gain",
-                                "weight_loss", 
-                                "endurance",
-                                "strength"
-                            ])
-                            
-                        register_button = st.form_submit_button("✨ Kayıt Ol", use_container_width=True)
+                if login_button:
+                    if username and password:
+                        user = get_user_from_db(username, password)
+                        
+                        if user:
+                            st.session_state.authenticated = True
+                            st.session_state.current_user = user
+                            st.session_state.chat_history = get_user_chats(user['_id'])
+                            st.success("✅ Giriş başarılı!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("❌ Kullanıcı adı veya şifre hatalı!")
+                    else:
+                        st.error("❌ Lütfen kullanıcı adı ve şifre girin!")
+        
+        with tab2:
+            with st.form("register_form"):
+                st.subheader("Kayıt Ol")
+                name = st.text_input("Ad Soyad")
+                new_username = st.text_input("Kullanıcı Adı")
+                new_password = st.text_input("Şifre", type="password")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=70)
+                with col_b:
+                    age = st.number_input("Yaş", min_value=16, max_value=80, value=25)
+                
+                goal = st.selectbox("Hedef", [
+                    "muscle_gain",
+                    "weight_loss", 
+                    "endurance",
+                    "strength"
+                ])
+                
+                register_button = st.form_submit_button("✨ Kayıt Ol", use_container_width=True)
                 
                 if register_button:
                     if name and new_username and new_password:
@@ -457,7 +431,6 @@ def login_page():
                             st.error("❌ Kayıt başarısız!")
                     else:
                         st.error("❌ Lütfen tüm alanları doldurun!")
-
 # Ana Uygulama
 def main_app():
     user = st.session_state.current_user
