@@ -172,16 +172,21 @@ def verify_password(password, hashed_password):
 @st.cache_resource
 def init_mongodb():
     try:
-        # Basitleştirilmiş ve güncel MongoDB bağlantı ayarları
+        # Özel SSL bağlamı oluştur
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+        # MongoDB bağlantı ayarları
         client = MongoClient(
             MONGODB_URI,
             tls=True,
             tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000,
-            socketTimeoutMS=5000,
-            maxPoolSize=50,
-            retryWrites=True
+            ssl_context=ssl_context,  # Özel SSL bağlamını kullan
+            serverSelectionTimeoutMS=30000,  # Timeout süresini artır
+            connectTimeoutMS=20000,
+            socketTimeoutMS=20000,
+            maxPoolSize=10
         )
         
         # Test bağlantısı
@@ -191,39 +196,17 @@ def init_mongodb():
         return db
     except Exception as e:
         st.error(f"❌ MongoDB bağlantı hatası: {str(e)}")
-        return None
-        
-        # Test bağlantısı
-        client.admin.command('ping')
-        st.success("✅ MongoDB Atlas bağlantısı başarılı!")
-        db = client['beast_mode']
-        return db
-    except Exception as e:
-        st.error(f"❌ MongoDB bağlantı hatası: {str(e)}")
-        return None
-        
-        # Test bağlantısı
-        client.admin.command('ping')
-        db = client['beast_mode_coach']
-        
-        setup_collections(db)
-        
-        return db
-    except Exception as e:
-        st.error(f"❌ MongoDB bağlantı hatası: {e}")
-        return None
-        
-        # Test bağlantısı
-        client.admin.command('ping')
-        db = client['beast_mode_coach']
-        
-        # Koleksiyonları oluştur ve index'ler ekle
-        setup_collections(db)
-        
-        return db
-    except Exception as e:
-        st.error(f"❌ MongoDB bağlantı hatası: {e}")
-        return None
+        # Offline moda geç
+        return create_offline_db()
+
+def create_offline_db():
+    """Offline demo veritabanı oluştur"""
+    st.warning("⚠️ MongoDB bağlantısı başarısız - Offline demo modunda çalışıyor")
+    return {
+        'demo': True,
+        'users': [],
+        'chats': [],
+        'exercises': []
 
 def setup_collections(db):
     """MongoDB koleksiyonlarını ve index'lerini ayarla"""
