@@ -11,6 +11,7 @@ import pymongo
 from pymongo import MongoClient
 import uuid
 import re
+import hashlib
 
 # Sayfa konfigürasyonu
 st.set_page_config(
@@ -67,6 +68,9 @@ st.markdown("""
         padding: 1.5rem;
         border-radius: 10px;
         margin: 1rem 0;
+    }
+    .stAlert {
+        border-radius: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -155,6 +159,15 @@ SUPPLEMENTS = [
     {'name': 'D3 Vitamini', 'dosage': '2000 IU'}
 ]
 
+# Utility Functions
+def hash_password(password):
+    """Şifreyi hash'le"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password, hashed_password):
+    """Şifreyi doğrula"""
+    return hashlib.sha256(password.encode()).hexdigest() == hashed_password
+
 # MongoDB Bağlantısı
 @st.cache_resource
 def init_mongodb():
@@ -163,59 +176,114 @@ def init_mongodb():
             MONGODB_URI,
             tls=True,
             tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=30000,
-            connectTimeoutMS=20000,
-            socketTimeoutMS=20000,
+            serverSelectionTimeoutMS=10000,
+            connectTimeoutMS=10000,
+            socketTimeoutMS=10000,
             maxPoolSize=10,
             retryWrites=True
         )
+        
+        # Test bağlantısı
         client.admin.command('ping')
-        st.success("✅ MongoDB Atlas bağlantısı başarılı!")
-        db = client['beast_mode']
+        db = client['beast_mode_coach']
+        
+        # Koleksiyonları oluştur ve index'ler ekle
+        setup_collections(db)
+        
         return db
     except Exception as e:
         st.error(f"❌ MongoDB bağlantı hatası: {e}")
         return None
 
+def setup_collections(db):
+    """MongoDB koleksiyonlarını ve index'lerini ayarla"""
+    try:
+        # Users koleksiyonu
+        if 'users' not in db.list_collection_names():
+            db.create_collection('users')
+        
+        # Username için unique index
+        try:
+            db.users.create_index('username', unique=True)
+        except:
+            pass  # Index zaten varsa devam et
+        
+        # Chats koleksiyonu
+        if 'chats' not in db.list_collection_names():
+            db.create_collection('chats')
+        
+        # User_id ve timestamp için index
+        try:
+            db.chats.create_index([('user_id', 1), ('timestamp', -1)])
+        except:
+            pass
+        
+        # Workouts koleksiyonu
+        if 'workouts' not in db.list_collection_names():
+            db.create_collection('workouts')
+        
+        try:
+            db.workouts.create_index([('user_id', 1), ('date', -1)])
+        except:
+            pass
+        
+        # Progress koleksiyonu
+        if 'progress' not in db.list_collection_names():
+            db.create_collection('progress')
+        
+        try:
+            db.progress.create_index([('user_id', 1), ('date', -1)])
+        except:
+            pass
+        
+    except Exception as e:
+        st.error(f"Koleksiyon ayarlama hatası: {e}")
+
 # Session State Initialization
 def init_session_state():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'current_user' not in st.session_state:
-        st.session_state.current_user = None
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    if 'exercise_log' not in st.session_state:
-        st.session_state.exercise_log = []
-    if 'beast_mode_score' not in st.session_state:
-        st.session_state.beast_mode_score = 75
-    if 'db' not in st.session_state:
+    default_values = {
+        'authenticated': False,
+        'current_user': None,
+        'chat_history': [],
+        'exercise_log': [],
+        'beast_mode_score': 75,
+        'db': None,
+        'chat_session_id': None
+    }
+    
+    for key, value in default_values.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+    
+    # MongoDB bağlantısını başlat
+    if st.session_state.db is None:
         st.session_state.db = init_mongodb()
 
 # MongoDB İşlemleri
 def save_user_to_db(user_data):
-    if st.session_state.db:
-        try:
-            st.session_state.db.users.insert_one(user_data)
-            return True
-        except Exception as e:
-            st.error(f"Kayıt hatası: {e}")
-            return False
-    return False
+    """Kullanıcıyı veritabanına kaydet"""
+    if not st.session_state.db:
+        return False
+    
+    try:
+        # Şifreyi hash'le
+        user_data['password'] = hash_password(user_data['password'])
+        user_data['created_at'] = datetime.now()
+        user_data['updated_at'] = datetime.now()
+        
+        result = st.session_state.db.users.insert_one(user_data)
+        return bool(result.inserted_id)
+    except pymongo.errors.DuplicateKeyError:
+        st.error("❌ Bu kullanıcı adı zaten kullanılıyor!")
+        return False
+    except Exception as e:
+        st.error(f"❌ Kayıt hatası: {e}")
+        return False
 
 def get_user_from_db(username, password):
-    if st.session_state.db:
-        try:
-            user = st.session_state.db.users.find_one({
-                'username': username, 
-                'password': password
-            })
-            return user
-        except Exception as e:
-            st.error(f"Giriş hatası: {e}")
-            return None
-    else:
-        # OFFLINE DEMO MODE
+    """Kullanıcıyı veritabanından getir"""
+    if not st.session_state.db:
+        # Offline demo mode
         if username == "demo" and password == "demo":
             return {
                 '_id': "demo-user",
@@ -225,97 +293,195 @@ def get_user_from_db(username, password):
                 'weight': 70,
                 'age': 25,
                 'goal': "muscle_gain",
-                'join_date': datetime.now(),
+                'created_at': datetime.now(),
                 'beast_mode_score': 75
             }
         return None
+    
+    try:
+        user = st.session_state.db.users.find_one({'username': username})
+        
+        if user and verify_password(password, user['password']):
+            return user
+        return None
+    except Exception as e:
+        st.error(f"❌ Giriş hatası: {e}")
+        return None
 
-def save_chat_to_db(user_id, chat_data):
-    if st.session_state.db:
-        try:
-            st.session_state.db.chats.insert_one({
-                'user_id': user_id,
-                'timestamp': datetime.now(),
-                **chat_data
-            })
-        except Exception as e:
-            st.error(f"Chat kayıt hatası: {e}")
+def save_chat_to_db(user_id, message, response, message_type='general'):
+    """Chat'i veritabanına kaydet"""
+    if not st.session_state.db:
+        return False
+    
+    try:
+        chat_data = {
+            'user_id': user_id,
+            'session_id': st.session_state.chat_session_id,
+            'message': message,
+            'response': response,
+            'message_type': message_type,
+            'timestamp': datetime.now()
+        }
+        
+        result = st.session_state.db.chats.insert_one(chat_data)
+        return bool(result.inserted_id)
+    except Exception as e:
+        st.error(f"❌ Chat kayıt hatası: {e}")
+        return False
 
-def get_user_chats(user_id):
-    if st.session_state.db:
-        try:
-            chats = list(st.session_state.db.chats.find(
-                {'user_id': user_id}
-            ).sort('timestamp', -1).limit(10))
-            return chats
-        except Exception as e:
-            st.error(f"Chat yükleme hatası: {e}")
-            return []
-    return []
+def get_user_chats(user_id, limit=20):
+    """Kullanıcının chat geçmişini getir"""
+    if not st.session_state.db:
+        return []
+    
+    try:
+        chats = list(st.session_state.db.chats.find(
+            {'user_id': user_id}
+        ).sort('timestamp', -1).limit(limit))
+        
+        return chats
+    except Exception as e:
+        st.error(f"❌ Chat yükleme hatası: {e}")
+        return []
+
+def save_workout_to_db(user_id, workout_data):
+    """Antrenman verisini kaydet"""
+    if not st.session_state.db:
+        return False
+    
+    try:
+        workout_data['user_id'] = user_id
+        workout_data['timestamp'] = datetime.now()
+        
+        result = st.session_state.db.workouts.insert_one(workout_data)
+        return bool(result.inserted_id)
+    except Exception as e:
+        st.error(f"❌ Antrenman kayıt hatası: {e}")
+        return False
+
+def update_user_progress(user_id, progress_data):
+    """Kullanıcı ilerlemesini güncelle"""
+    if not st.session_state.db:
+        return False
+    
+    try:
+        progress_data['user_id'] = user_id
+        progress_data['date'] = datetime.now().date()
+        progress_data['timestamp'] = datetime.now()
+        
+        # Upsert: eğer bugünkü kayıt varsa güncelle, yoksa ekle
+        result = st.session_state.db.progress.update_one(
+            {'user_id': user_id, 'date': progress_data['date']},
+            {'$set': progress_data},
+            upsert=True
+        )
+        
+        return True
+    except Exception as e:
+        st.error(f"❌ İlerleme kayıt hatası: {e}")
+        return False
 
 # Mesaj Analizi
 def analyze_message(message):
-    exercise_keywords = ['antrenman', 'egzersiz', 'set', 'tekrar', 'squat', 'push-up', 'pull-up', 'plank', 'burpee']
-    general_keywords = ['yorgun', 'motivasyon', 'nasılım', 'hissediyorum', 'uyku', 'beslenme']
+    """Mesajı analiz et ve türünü belirle"""
+    exercise_keywords = ['antrenman', 'egzersiz', 'set', 'tekrar', 'squat', 'push-up', 'pull-up', 'plank', 'burpee', 'workout']
+    nutrition_keywords = ['beslenme', 'diyet', 'protein', 'karbonhidrat', 'yemek', 'kahvaltı', 'öğle', 'akşam']
+    motivation_keywords = ['motivasyon', 'yorgun', 'üşengeç', 'isteksiz', 'energy', 'enerji']
+    progress_keywords = ['ilerleme', 'gelişim', 'kilo', 'kas', 'güç', 'dayanıklılık']
     
     message_lower = message.lower()
+    
+    # Keyword sayılarını hesapla
     exercise_count = sum(1 for keyword in exercise_keywords if keyword in message_lower)
-    general_count = sum(1 for keyword in general_keywords if keyword in message_lower)
+    nutrition_count = sum(1 for keyword in nutrition_keywords if keyword in message_lower)
+    motivation_count = sum(1 for keyword in motivation_keywords if keyword in message_lower)
+    progress_count = sum(1 for keyword in progress_keywords if keyword in message_lower)
     
-    exercise_data = None
-    if exercise_count > general_count:
-        exercises = list(BEAST_MODE_DATA['exercises'].keys())
-        found_exercise = None
-        
-        # Egzersiz ismi bul
-        for ex in exercises:
-            if ex.lower() in message_lower:
-                found_exercise = ex
-                break
-        
-        if found_exercise:
-            set_match = re.search(r'(\d+)\s*set', message_lower)
-            rep_match = re.search(r'(\d+)\s*tekrar', message_lower)
-            
-            exercise_data = {
-                'exercise': found_exercise,
-                'sets': int(set_match.group(1)) if set_match else 3,
-                'reps': int(rep_match.group(1)) if rep_match else 10,
-                'muscle_group': BEAST_MODE_DATA['exercises'][found_exercise]['muscle_group']
-            }
+    # En yüksek skoru belirle
+    max_count = max(exercise_count, nutrition_count, motivation_count, progress_count)
     
-    return {
-        'type': 'exercise' if exercise_count > general_count else 'general',
-        'exercise_data': exercise_data
-    }
+    if max_count == 0:
+        return {'type': 'general', 'exercise_data': None}
+    
+    if exercise_count == max_count:
+        return {'type': 'exercise', 'exercise_data': extract_exercise_data(message)}
+    elif nutrition_count == max_count:
+        return {'type': 'nutrition', 'exercise_data': None}
+    elif motivation_count == max_count:
+        return {'type': 'motivation', 'exercise_data': None}
+    elif progress_count == max_count:
+        return {'type': 'progress', 'exercise_data': None}
+    else:
+        return {'type': 'general', 'exercise_data': None}
 
-# Groq API - Hafızalı
+def extract_exercise_data(message):
+    """Mesajdan egzersiz verisini çıkar"""
+    message_lower = message.lower()
+    exercises = list(BEAST_MODE_DATA['exercises'].keys())
+    
+    found_exercise = None
+    for ex in exercises:
+        if ex.lower() in message_lower or ex.replace('-', ' ').lower() in message_lower:
+            found_exercise = ex
+            break
+    
+    if found_exercise:
+        set_match = re.search(r'(\d+)\s*set', message_lower)
+        rep_match = re.search(r'(\d+)\s*tekrar', message_lower)
+        
+        return {
+            'exercise': found_exercise,
+            'sets': int(set_match.group(1)) if set_match else 3,
+            'reps': int(rep_match.group(1)) if rep_match else 10,
+            'muscle_group': BEAST_MODE_DATA['exercises'][found_exercise]['muscle_group']
+        }
+    
+    return None
+
+# Groq API - Doğal Konuşma
 def call_groq_api(message, message_type, user_data, chat_history=None):
+    """Groq API'ye doğal konuşma isteği gönder"""
     try:
-        # Hafıza için son 10 mesajı al
-        recent_chats = chat_history[-10:] if chat_history else []
+        # Son konuşmaları al
+        recent_chats = (chat_history[-5:] if chat_history else [])
         conversation_context = ""
         
         if recent_chats:
             conversation_context = "\n\nÖnceki konuşmalar:\n"
             for chat in recent_chats:
-                conversation_context += f"Kullanıcı: {chat['message']}\nKoç: {chat['response']}\n\n"
+                conversation_context += f"Sen: {chat.get('response', '')}\nKullanıcı: {chat.get('message', '')}\n"
+        
+        # Mesaj türüne göre sistem promptu
+        base_personality = (
+            f"Sen {user_data['name']} adlı kişinin kişisel fitness koçusun. "
+            f"Samimi, arkadaşça ve motive edici konuş. Robot gibi değil, gerçek bir insan gibi davran. "
+            f"Kısa cümleler kur, emoji kullan, esprili ol. "
+            f"Kullanıcı bilgileri: {user_data['age']} yaşında, {user_data['weight']}kg, Beast Mode skoru: %{st.session_state.beast_mode_score}"
+        )
         
         if message_type == 'exercise':
             system_prompt = (
-                f"Sen profesyonel bir fitness koçusun. Samimi ve motive edici konuş, robot gibi değil.\n"
-                f"Kullanıcı: {user_data['name']}, Kilo: {user_data['weight']}kg, Yaş: {user_data['age']}, Beast Mode: %{st.session_state.beast_mode_score}\n\n"
-                f"Kullanıcı mesajı: \"{message}\"\n"
-                f"{conversation_context}\n\n"
-                "Kısa (max 80 kelime), samimi ve motive edici Türkçe yanıt ver. Teknik tavsiye ekle."
+                f"{base_personality}\n\n"
+                "Antrenman konusunda konuşuyorsunuz. Teknik bilgi ver ama sıkıcı olma. "
+                "Kişisel deneyimlerini paylaşıyormuş gibi konuş. Max 60 kelime."
+            )
+        elif message_type == 'nutrition':
+            system_prompt = (
+                f"{base_personality}\n\n"
+                "Beslenme konusunda konuşuyorsunuz. Pratik tavsiyeler ver, ezber bilgi verme. "
+                "Gerçek hayattan örnekler kullan. Max 70 kelime."
+            )
+        elif message_type == 'motivation':
+            system_prompt = (
+                f"{base_personality}\n\n"
+                "Motivasyon konusunda konuşuyorsunuz. Empati kurup destekle. "
+                "Kendi zorlandığın anlardan bahset. Samimi ol. Max 80 kelime."
             )
         else:
             system_prompt = (
-                f"Sen profesyonel bir fitness koçusun. Samimi ve destekleyici konuş.\n"
-                f"Kullanıcı: {user_data['name']}, Beast Mode: %{st.session_state.beast_mode_score}\n\n"
-                f"Kullanıcı mesajı: \"{message}\"\n"
-                f"{conversation_context}\n\n"
-                "Kısa (max 70 kelime), samimi Türkçe yanıt ver. Soru sor ve tavsiye ver."
+                f"{base_personality}\n\n"
+                "Genel sohbet ediyorsunuz. Rahat ol, arkadaşça konuş. "
+                "Merak et, soru sor. Max 70 kelime."
             )
 
         headers = {
@@ -325,36 +491,50 @@ def call_groq_api(message, message_type, user_data, chat_history=None):
         
         data = {
             'model': 'llama-3.3-70b-versatile',
-            'messages': [{'role': 'system', 'content': system_prompt}],
-            'temperature': 0.8,
-            'max_tokens': 200
+            'messages': [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': f"{message}\n{conversation_context}"}
+            ],
+            'temperature': 0.9,
+            'max_tokens': 150
         }
 
-        response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=10)
+        response = requests.post(GROQ_API_URL, headers=headers, json=data, timeout=15)
         
         if response.status_code == 200:
             result = response.json()
             return result['choices'][0]['message']['content'].strip()
         else:
-            return f"❌ API Hatası ({response.status_code}). Tekrar deneyin."
+            return get_fallback_response(message_type)
             
     except Exception as e:
-        return f"❌ Bağlantı hatası: {str(e)}"
+        return get_fallback_response(message_type)
+
+def get_fallback_response(message_type):
+    """API hatası durumunda fallback yanıt"""
+    fallback_responses = {
+        'exercise': "Antrenman konusunda konuşalım! Hangi egzersizde zorlanıyorsun? 💪",
+        'nutrition': "Beslenme çok önemli! Bugün ne yedin, nasıl hissediyorsun? 🍎",
+        'motivation': "Hey, bazen herkes zorlanır. Bu normal! Beraber çözeriz 🦁",
+        'general': "Merhaba! Nasıl gidiyor bugün? Sana nasıl yardım edebilirim? 😊"
+    }
+    return fallback_responses.get(message_type, "Tekrar dener misin? 🤔")
 
 # Giriş/Kayıt Ekranı
 def login_page():
     st.markdown("""
     <div class="main-header">
         <h1>🦁 Beast Mode Coach</h1>
-        <p>6 Aylık Kişisel Fitness Dönüşümün</p>
+        <p>6 Aylık Kişisel Fitness Dönüşümün Başlasın!</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # MongoDB durumu
+    # Bağlantı durumu
+    connection_status = st.empty()
     if st.session_state.db:
-        st.success("✅ MongoDB bağlantısı aktif")
+        connection_status.success("✅ Veritabanı bağlantısı aktif")
     else:
-        st.warning("⚠️ MongoDB bağlantısı başarısız - Offline demo modunda çalışıyor")
+        connection_status.warning("⚠️ Veritabanı bağlantısı yok - Demo modda çalışıyor")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -362,21 +542,36 @@ def login_page():
         tab1, tab2 = st.tabs(["🚀 Giriş Yap", "✨ Kayıt Ol"])
         
         with tab1:
-            with st.form("login_form"):
-                st.subheader("Giriş Yap")
-                username = st.text_input("Kullanıcı Adı")
-                password = st.text_input("Şifre", type="password")
-                login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
+            with st.form("login_form", clear_on_submit=True):
+                st.subheader("Hoş Geldin!")
+                username = st.text_input("Kullanıcı Adı", placeholder="Kullanıcı adını gir")
+                password = st.text_input("Şifre", type="password", placeholder="Şifreni gir")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
+                with col_b:
+                    demo_button = st.form_submit_button("🎮 Demo Dene", use_container_width=True)
+                
+                if demo_button:
+                    username, password = "demo", "demo"
+                    login_button = True
                 
                 if login_button:
                     if username and password:
-                        user = get_user_from_db(username, password)
+                        with st.spinner("Giriş yapılıyor..."):
+                            user = get_user_from_db(username, password)
                         
                         if user:
                             st.session_state.authenticated = True
                             st.session_state.current_user = user
-                            st.session_state.chat_history = get_user_chats(user['_id'])
-                            st.success("✅ Giriş başarılı!")
+                            st.session_state.chat_session_id = str(uuid.uuid4())
+                            
+                            # Chat geçmişini yükle
+                            if st.session_state.db:
+                                st.session_state.chat_history = get_user_chats(user['_id'])
+                            
+                            st.success("✅ Hoş geldin! Hemen başlayalım 🦁")
                             time.sleep(1)
                             st.rerun()
                         else:
@@ -385,11 +580,11 @@ def login_page():
                         st.error("❌ Lütfen kullanıcı adı ve şifre girin!")
         
         with tab2:
-            with st.form("register_form"):
-                st.subheader("Kayıt Ol")
-                name = st.text_input("Ad Soyad")
-                new_username = st.text_input("Kullanıcı Adı")
-                new_password = st.text_input("Şifre", type="password")
+            with st.form("register_form", clear_on_submit=True):
+                st.subheader("Aramıza Katıl!")
+                name = st.text_input("Ad Soyad", placeholder="Adın ve soyadın")
+                new_username = st.text_input("Kullanıcı Adı", placeholder="Benzersiz kullanıcı adı")
+                new_password = st.text_input("Şifre", type="password", placeholder="Güvenli şifre")
                 
                 col_a, col_b = st.columns(2)
                 with col_a:
@@ -397,40 +592,58 @@ def login_page():
                 with col_b:
                     age = st.number_input("Yaş", min_value=16, max_value=80, value=25)
                 
-                goal = st.selectbox("Hedef", [
-                    "muscle_gain",
-                    "weight_loss", 
-                    "endurance",
-                    "strength"
-                ])
+                goal = st.selectbox("Hedefin Ne?", [
+                    ("muscle_gain", "💪 Kas Kazanmak"),
+                    ("weight_loss", "🔥 Kilo Vermek"), 
+                    ("endurance", "🏃 Dayanıklılık"),
+                    ("strength", "⚡ Güç Artırmak")
+                ], format_func=lambda x: x[1])
                 
-                register_button = st.form_submit_button("✨ Kayıt Ol", use_container_width=True)
+                register_button = st.form_submit_button("✨ Hemen Başla!", use_container_width=True)
                 
                 if register_button:
                     if name and new_username and new_password:
-                        new_user = {
-                            '_id': str(uuid.uuid4()),
-                            'name': name,
-                            'username': new_username,
-                            'password': new_password,
-                            'weight': weight,
-                            'age': age,
-                            'goal': goal,
-                            'join_date': datetime.now(),
-                            'beast_mode_score': 75
-                        }
-                        
-                        if save_user_to_db(new_user):
-                            st.session_state.authenticated = True
-                            st.session_state.current_user = new_user
-                            st.session_state.chat_history = []
-                            st.success("✅ Kayıt başarılı!")
-                            time.sleep(1)
-                            st.rerun()
+                        if len(new_password) < 4:
+                            st.error("❌ Şifre en az 4 karakter olmalı!")
                         else:
-                            st.error("❌ Kayıt başarısız!")
+                            new_user = {
+                                '_id': str(uuid.uuid4()),
+                                'name': name,
+                                'username': new_username,
+                                'password': new_password,
+                                'weight': weight,
+                                'age': age,
+                                'goal': goal[0],
+                                'beast_mode_score': 75
+                            }
+                            
+                            with st.spinner("Hesap oluşturuluyor..."):
+                                if save_user_to_db(new_user):
+                                    st.session_state.authenticated = True
+                                    st.session_state.current_user = new_user
+                                    st.session_state.chat_session_id = str(uuid.uuid4())
+                                    st.session_state.chat_history = []
+                                    st.success("✅ Hoş geldin! Beast Mode başlıyor 🦁")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Kayıt başarısız! Farklı kullanıcı adı dene.")
                     else:
                         st.error("❌ Lütfen tüm alanları doldurun!")
+
+# Ana uygulama
+def main():
+    init_session_state()
+    
+    if not st.session_state.authenticated:
+        login_page()
+    else:
+        # Ana uygulama buraya gelecek (2. kısımda)
+        st.success("✅ Giriş başarılı! Ana uygulama yükleniyor...")
+        st.write("2. kısmı gönderdiğinizde buraya ana uygulama gelecek.")
+
+if __name__ == "__main__":
+    main()
 # Ana Uygulama
 def main_app():
     user = st.session_state.current_user
