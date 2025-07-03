@@ -411,29 +411,27 @@ def login_page():
                     time.sleep(1)
                     st.rerun()
                 elif login_button:
-        
-        
-        with tab2:
-            with st.form("register_form"):
-                st.subheader("Kayıt Ol")
-                name = st.text_input("Ad Soyad")
-                new_username = st.text_input("Kullanıcı Adı")
-                new_password = st.text_input("Şifre", type="password")
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=70)
-                with col_b:
-                    age = st.number_input("Yaş", min_value=16, max_value=80, value=25)
-                
-                goal = st.selectbox("Hedef", [
-                    "muscle_gain",
-                    "weight_loss", 
-                    "endurance",
-                    "strength"
-                ])
-                
-                register_button = st.form_submit_button("✨ Kayıt Ol", use_container_width=True)
+                    with tab2:
+                        with st.form("register_form"):
+                            st.subheader("Kayıt Ol")
+                            name = st.text_input("Ad Soyad")
+                            new_username = st.text_input("Kullanıcı Adı")
+                            new_password = st.text_input("Şifre", type="password")
+                            
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=70)
+                            with col_b:
+                                age = st.number_input("Yaş", min_value=16, max_value=80, value=25)
+                            
+                            goal = st.selectbox("Hedef", [
+                                "muscle_gain",
+                                "weight_loss", 
+                                "endurance",
+                                "strength"
+                            ])
+                            
+                        register_button = st.form_submit_button("✨ Kayıt Ol", use_container_width=True)
                 
                 if register_button:
                     if name and new_username and new_password:
