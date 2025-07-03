@@ -397,7 +397,12 @@ def login_page():
                 
                 if login_button:
                     user = get_user_from_db(username, password)
-                
+                user = None  # <-- Burası önemli!
+    
+                login_button = st.button("Giriş Yap")
+                if login_button:
+                    user = get_user_from_db(username, password)
+            
                 if user:
                     st.session_state.authenticated = True
                     st.session_state.current_user = user
@@ -405,10 +410,8 @@ def login_page():
                     st.success("✅ Giriş başarılı!")
                     time.sleep(1)
                     st.rerun()
-                else:
-                    st.error("❌ Kullanıcı adı veya şifre hatalı!")
-            
-            st.info("📝 Demo: MongoDB bağlantısı yoksa test hesabı oluşturun")
+                elif login_button:
+        
         
         with tab2:
             with st.form("register_form"):
