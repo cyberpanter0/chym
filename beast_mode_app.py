@@ -125,12 +125,20 @@ def init_mongodb():
     except Exception as e:
         st.error(f"❌ MongoDB bağlantı hatası: {e}")
         return None
-    
-    except Exception as e:
-        st.error(f"MongoDB bağlantı hatası: {e}")
-        print(f"Detaylı hata: {e}")
-        return None, None
 
+        def get_user_from_db(username, password):
+    if st.session_state.db:
+        try:
+            user = st.session_state.db.users.find_one({
+                'username': username, 
+                'password': password
+            })
+            return user
+        except Exception as e:
+            st.error(f"Giriş hatası: {e}")
+            return None
+    else:
+        # OFFLINE DEMO MODE
         if username == "demo" and password == "demo":
             return {
                 '_id': "demo-user",
@@ -158,7 +166,6 @@ def init_session_state():
         st.session_state.beast_mode_score = 75
     if 'db' not in st.session_state:
         st.session_state.db = init_mongodb()
-
 # Günlük Program
 DAILY_PROGRAM = {
     'hafta_1_2': {
