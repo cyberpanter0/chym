@@ -393,13 +393,9 @@ def login_page():
                 st.subheader("Giriş Yap")
                 username = st.text_input("Kullanıcı Adı")
                 password = st.text_input("Şifre", type="password")
-                login_button = st.form_submit_button("🚀 Giriş Yap", use_container_width=True)
-                
-                if login_button:
-                    user = get_user_from_db(username, password)
-                user = None  # <-- Burası önemli!
-    
-                login_button = st.button("Giriş Yap")
+                login_button = st.form_submit_button("Giriş Yap")
+                    
+                            user = None
                 if login_button:
                     user = get_user_from_db(username, password)
             
@@ -410,6 +406,9 @@ def login_page():
                     st.success("✅ Giriş başarılı!")
                     time.sleep(1)
                     st.rerun()
+                elif login_button:
+                    st.error("❌ Kullanıcı adı veya şifre hatalı!")
+                
                 elif login_button:
                     with tab2:
                         with st.form("register_form"):
