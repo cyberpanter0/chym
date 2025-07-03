@@ -180,6 +180,7 @@ def init_session_state():
         st.session_state.beast_mode_score = 75
     if 'db' not in st.session_state:
         st.session_state.db = init_mongodb()
+
 # Günlük Program
 DAILY_PROGRAM = {
     'hafta_1_2': {
@@ -396,16 +397,16 @@ def login_page():
                 
                 if login_button:
                     user = get_user_from_db(username, password)
-                    
-                    if user:
-                        st.session_state.authenticated = True
-                        st.session_state.current_user = user
-                        st.session_state.chat_history = get_user_chats(user['_id'])
-                        st.success("✅ Giriş başarılı!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("❌ Kullanıcı adı veya şifre hatalı!")
+                
+                if user:
+                    st.session_state.authenticated = True
+                    st.session_state.current_user = user
+                    st.session_state.chat_history = get_user_chats(user['_id'])
+                    st.success("✅ Giriş başarılı!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("❌ Kullanıcı adı veya şifre hatalı!")
             
             st.info("📝 Demo: MongoDB bağlantısı yoksa test hesabı oluşturun")
         
