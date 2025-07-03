@@ -72,7 +72,7 @@ st.markdown("""
 # Sabitler
 GROQ_API_KEY = "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"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm654@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 # Beast Mode Verileri - Düzeltilmiş
 BEAST_MODE_DATA = {
     'exercises': {
@@ -125,6 +125,20 @@ def init_mongodb():
     except Exception as e:
         st.error(f"❌ MongoDB bağlantı hatası: {e}")
         return None
+
+def init_session_state():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'current_user' not in st.session_state:
+        st.session_state.current_user = None
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'exercise_log' not in st.session_state:
+        st.session_state.exercise_log = []
+    if 'beast_mode_score' not in st.session_state:
+        st.session_state.beast_mode_score = 75
+    if 'db' not in st.session_state:
+        st.session_state.db = init_mongodb()
 
 def get_user_from_db(username, password):
     if st.session_state.db:
