@@ -631,19 +631,6 @@ def login_page():
                     else:
                         st.error("❌ Lütfen tüm alanları doldurun!")
 
-# Ana uygulama
-def main():
-    init_session_state()
-    
-    if not st.session_state.authenticated:
-        login_page()
-    else:
-        # Ana uygulama buraya gelecek (2. kısımda)
-        st.success("✅ Giriş başarılı! Ana uygulama yükleniyor...")
-        st.write("2. kısmı gönderdiğinizde buraya ana uygulama gelecek.")
-
-if __name__ == "__main__":
-    main()
 # Ana Uygulama
 def main_app():
     user = st.session_state.current_user
