@@ -485,13 +485,12 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 
 with tab1:
     # Bugünün programı
-    program_week = user_data.get('program_week', 1)
+      program_week = user_data.get('program_week', 1)
     
     col1, col2 = st.columns(2)
     
     with col1:
         if program_week <= 2:
-            # render_workout_card fonksiyonu tanımlanmadığı için basit HTML kullanıyoruz
             st.markdown("""
             <div class="workout-card">
                 <h3>🏋️ Sabah Antrenmanı (06:00)</h3>
