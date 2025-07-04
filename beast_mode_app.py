@@ -172,17 +172,11 @@ def verify_password(password, hashed_password):
 @st.cache_resource
 def init_mongodb():
     try:
-        # Özel SSL bağlamı oluştur
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
-        # MongoDB bağlantı ayarları
+        # MongoDB bağlantı ayarları - ssl_context parametresi kaldırıldı
         client = MongoClient(
             MONGODB_URI,
             tls=True,
             tlsAllowInvalidCertificates=True,
-            ssl_context=ssl_context,  # Özel SSL bağlamını kullan
             serverSelectionTimeoutMS=30000,  # Timeout süresini artır
             connectTimeoutMS=20000,
             socketTimeoutMS=20000,
