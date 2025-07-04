@@ -13,370 +13,699 @@ import uuid
 import re
 import hashlib
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from functools import lru_cache
 import asyncio
 import aiohttp
+from dataclasses import dataclass, field
+from enum import Enum
+import os
+from contextlib import contextmanager
 
-# Logging konfigürasyonu
-logging.basicConfig(level=logging.INFO)
+# Geliştirilmiş Logging Configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('chym_app.log'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Enum Classes for Better Type Safety
+class DifficultyLevel(Enum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+class MuscleGroup(Enum):
+    CHEST = "chest"
+    BACK = "back"
+    LEGS = "legs"
+    CORE = "core"
+    SHOULDERS = "shoulders"
+    ARMS = "arms"
+    FULL_BODY = "full_body"
+
+class WorkoutType(Enum):
+    MORNING = "sabah"
+    EVENING = "aksam"
+
+class NutritionType(Enum):
+    HYDRATION = "hydration"
+    PRE_WORKOUT = "pre_workout"
+    POST_WORKOUT = "post_workout"
+    MEAL = "meal"
+    SNACK = "snack"
+    PRE_SLEEP = "pre_sleep"
+    WORKOUT = "workout"
+    SLEEP = "sleep"
+
+# Data Classes for Better Structure
+@dataclass
+class Exercise:
+    name: str
+    muscle_group: MuscleGroup
+    difficulty: DifficultyLevel
+    calories_per_rep: float = 0.0
+    calories_per_second: float = 0.0
+    description: str = ""
+    progressions: List[str] = field(default_factory=list)
+    
+    def get_display_name(self) -> str:
+        return self.name.replace('_', ' ').title()
+
+@dataclass
+class WorkoutSet:
+    exercise: str
+    sets: int
+    reps: str
+    notes: str = ""
+    rest: str = "60sn"
+    tempo: str = "2-0-2-0"
+
+@dataclass
+class NutritionItem:
+    time: str
+    item: str
+    type: NutritionType
+    calories: int = 0
+
+# Configuration Class
+class Config:
+    # API Keys - Gerçek uygulamada environment variables kullanın
+    GROQ_API_KEY: str = "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"
+    GROQ_API_URL: str = "https://api.groq.com/openai/v1/chat/completions"
+    MONGODB_URI: str = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    
+    # UI Configuration
+    PAGE_TITLE: str = "🏋️‍♂️ CHYM - Beast Mode Coach"
+    PAGE_ICON: str = "🏋️‍♂️"
+    THEME_COLOR: str = "#FF6B35"
+    SECONDARY_COLOR: str = "#F7931E"
 
 # Sayfa konfigürasyonu
 st.set_page_config(
-    page_title="🦁 Beast Mode Coach",
-    page_icon="🦁",
+    page_title=Config.PAGE_TITLE,
+    page_icon=Config.PAGE_ICON,
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/your-repo/chym',
+        'Report a bug': "https://github.com/your-repo/chym/issues",
+        'About': "# CHYM Fitness App\nKişisel AI Fitness Koçunuz!"
+    }
 )
 
-# Geliştirilmiş CSS Stilleri
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(135deg, #FF6B35, #F7931E);
-        padding: 2rem;
-        border-radius: 15px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
-        backdrop-filter: blur(10px);
-    }
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        border-left: 4px solid #FF6B35;
-        transition: transform 0.3s ease;
-    }
-    .metric-card:hover {
-        transform: translateY(-5px);
-    }
-    .chat-message {
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-radius: 15px;
-        max-width: 70%;
-        animation: fadeIn 0.3s ease;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .user-message {
-        background: linear-gradient(135deg, #FF6B35, #F7931E);
-        color: white;
-        margin-left: 30%;
-        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
-    }
-    .ai-message {
-        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-        color: #333;
-        margin-right: 30%;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    .exercise-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        border: 1px solid #e0e0e0;
-        margin: 0.5rem 0;
-        transition: all 0.3s ease;
-    }
-    .exercise-card:hover {
-        border-color: #FF6B35;
-        box-shadow: 0 4px 20px rgba(255, 107, 53, 0.2);
-    }
-    .program-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        margin: 1rem 0;
-        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
-    }
-    .progress-bar {
-        background: #e0e0e0;
-        border-radius: 10px;
-        height: 20px;
-        overflow: hidden;
-    }
-    .progress-fill {
-        background: linear-gradient(90deg, #FF6B35, #F7931E);
-        height: 100%;
-        transition: width 0.3s ease;
-    }
-    .stAlert {
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    .success-badge {
-        background: linear-gradient(135deg, #28a745, #20c997);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        font-weight: bold;
-    }
-    .loading-spinner {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #FF6B35;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        margin: 20px auto;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Sabitler
-GROQ_API_KEY = "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"
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
-# Geliştirilmiş Beast Mode Verileri
-BEAST_MODE_DATA = {
-    'exercises': {
-        'pike push-up': {
-            'muscle_group': 'shoulders', 
-            'difficulty': 'intermediate',
-            'calories_per_rep': 0.8,
-            'description': 'Omuz kaslarını güçlendiren etkili hareket',
-            'progressions': ['wall handstand', 'handstand push-up']
-        },
-        'diamond push-up': {
-            'muscle_group': 'chest', 
-            'difficulty': 'intermediate',
-            'calories_per_rep': 0.9,
-            'description': 'Triceps ve göğüs odaklı push-up varyasyonu',
-            'progressions': ['archer push-up', 'one arm push-up']
-        },
-        'bulgarian split squat': {
-            'muscle_group': 'legs', 
-            'difficulty': 'intermediate',
-            'calories_per_rep': 1.2,
-            'description': 'Unilateral bacak antrenmanı',
-            'progressions': ['jump split squat', 'pistol squat']
-        },
-        'single arm push-up': {
-            'muscle_group': 'chest', 
-            'difficulty': 'advanced',
-            'calories_per_rep': 2.0,
-            'description': 'En zorlu push-up varyasyonu',
-            'progressions': ['maltese push-up']
-        },
-        'archer squat': {
-            'muscle_group': 'legs', 
-            'difficulty': 'advanced',
-            'calories_per_rep': 1.5,
-            'description': 'Tek bacak squat progression',
-            'progressions': ['pistol squat', 'shrimp squat']
-        },
-        'l-sit hold': {
-            'muscle_group': 'core', 
-            'difficulty': 'advanced',
-            'calories_per_second': 0.2,
-            'description': 'Core gücü ve denge',
-            'progressions': ['v-sit', 'manna hold']
-        },
-        'hollow body hold': {
-            'muscle_group': 'core', 
-            'difficulty': 'intermediate',
-            'calories_per_second': 0.15,
-            'description': 'Core stabilizasyonu',
-            'progressions': ['hollow body rocks', 'dragon flag']
-        },
-        'handstand wall walk': {
-            'muscle_group': 'shoulders', 
-            'difficulty': 'advanced',
-            'calories_per_rep': 1.8,
-            'description': 'Handstand progression',
-            'progressions': ['freestanding handstand', 'handstand push-up']
-        },
-        'pistol squat': {
-            'muscle_group': 'legs', 
-            'difficulty': 'advanced',
-            'calories_per_rep': 2.2,
-            'description': 'Tek bacak squat',
-            'progressions': ['jumping pistol squat', 'weighted pistol squat']
-        },
-        'one arm plank': {
-            'muscle_group': 'core', 
-            'difficulty': 'advanced',
-            'calories_per_second': 0.25,
-            'description': 'Asimetrik core egzersizi',
-            'progressions': ['one arm one leg plank']
-        },
-        'hindu push-up': {
-            'muscle_group': 'chest', 
-            'difficulty': 'intermediate',
-            'calories_per_rep': 1.1,
-            'description': 'Flow hareketi',
-            'progressions': ['dive bomber push-up']
-        },
-        'burpee': {
-            'muscle_group': 'full_body', 
-            'difficulty': 'intermediate',
-            'calories_per_rep': 1.5,
-            'description': 'Tüm vücut kondisyon',
-            'progressions': ['burpee box jump', 'burpee pull-up']
-        },
-        'push-up': {
-            'muscle_group': 'chest', 
-            'difficulty': 'beginner',
-            'calories_per_rep': 0.7,
-            'description': 'Temel üst vücut egzersizi',
-            'progressions': ['incline push-up', 'diamond push-up']
-        },
-        'pull-up': {
-            'muscle_group': 'back', 
-            'difficulty': 'intermediate',
-            'calories_per_rep': 1.3,
-            'description': 'Sırt ve biceps geliştirici',
-            'progressions': ['weighted pull-up', 'one arm pull-up']
-        },
-        'squat': {
-            'muscle_group': 'legs', 
-            'difficulty': 'beginner',
-            'calories_per_rep': 0.8,
-            'description': 'Temel bacak egzersizi',
-            'progressions': ['jump squat', 'pistol squat']
-        },
-        'plank': {
-            'muscle_group': 'core', 
-            'difficulty': 'beginner',
-            'calories_per_second': 0.1,
-            'description': 'Core stabilizasyonu',
-            'progressions': ['side plank', 'plank to push-up']
+# Geliştirilmiş ve Modernize Edilmiş CSS
+def load_css():
+    st.markdown("""
+    <style>
+        /* Import Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        /* Root Variables */
+        :root {
+            --primary-color: #FF6B35;
+            --secondary-color: #F7931E;
+            --accent-color: #667eea;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --dark-color: #343a40;
+            --light-color: #f8f9fa;
+            --border-radius: 12px;
+            --border-radius-lg: 16px;
+            --box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            --box-shadow-lg: 0 8px 32px rgba(0,0,0,0.15);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-    },
-    'muscle_groups': {
-        'chest': {'emoji': '🫴', 'name': 'Göğüs', 'color': '#FF6B35'},
-        'back': {'emoji': '🔙', 'name': 'Sırt', 'color': '#36A2EB'}, 
-        'legs': {'emoji': '🦵', 'name': 'Bacak', 'color': '#4BC0C0'},
-        'core': {'emoji': '💪', 'name': 'Core', 'color': '#FFCE56'},
-        'shoulders': {'emoji': '🤲', 'name': 'Omuz', 'color': '#9966FF'},
-        'arms': {'emoji': '💪', 'name': 'Kol', 'color': '#FF9F40'},
-        'full_body': {'emoji': '🎯', 'name': 'Tüm Vücut', 'color': '#FF6384'}
-    },
-    'difficulty_levels': {
-        'beginner': {'level': 1, 'color': '#28a745', 'emoji': '🟢'},
-        'intermediate': {'level': 2, 'color': '#ffc107', 'emoji': '🟡'},
-        'advanced': {'level': 3, 'color': '#dc3545', 'emoji': '🔴'}
-    }
-}
+        
+        /* Global Styles */
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* Hide Streamlit branding */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        
+        /* Main Container */
+        .main-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            padding: 2.5rem 2rem;
+            border-radius: var(--border-radius-lg);
+            color: white;
+            text-align: center;
+            margin-bottom: 2rem;
+            box-shadow: var(--box-shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .main-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        
+        .main-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .main-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        /* Metric Cards */
+        .metric-card {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            border: 1px solid rgba(0,0,0,0.05);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background: linear-gradient(180deg, var(--primary-color), var(--secondary-color));
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-label {
+            font-size: 1rem;
+            color: var(--dark-color);
+            opacity: 0.7;
+            font-weight: 500;
+        }
+        
+        /* Chat Messages */
+        .chat-container {
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 1rem;
+            background: var(--light-color);
+            border-radius: var(--border-radius);
+            margin: 1rem 0;
+        }
+        
+        .chat-message {
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border-radius: var(--border-radius-lg);
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+            position: relative;
+        }
+        
+        @keyframes slideIn {
+            from { 
+                opacity: 0; 
+                transform: translateY(20px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
+        }
+        
+        .user-message {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            margin-left: auto;
+            margin-right: 0;
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.3);
+        }
+        
+        .ai-message {
+            background: white;
+            color: var(--dark-color);
+            margin-left: 0;
+            margin-right: auto;
+            box-shadow: var(--box-shadow);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        
+        /* Exercise Cards */
+        .exercise-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            border: 1px solid rgba(0,0,0,0.08);
+            margin: 1rem 0;
+            transition: var(--transition);
+            position: relative;
+        }
+        
+        .exercise-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 8px 25px rgba(255, 107, 53, 0.15);
+            transform: translateY(-4px);
+        }
+        
+        .exercise-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .exercise-details {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        
+        .exercise-detail {
+            background: var(--light-color);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        /* Program Cards */
+        .program-card {
+            background: linear-gradient(135deg, var(--accent-color) 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: var(--border-radius-lg);
+            margin: 1rem 0;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .program-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 10s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Progress Bars */
+        .progress-container {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            height: 24px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, var(--success-color), #20c997);
+            height: 100%;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 10px;
+            position: relative;
+        }
+        
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-success {
+            background: linear-gradient(135deg, var(--success-color), #20c997);
+            color: white;
+        }
+        
+        .badge-warning {
+            background: linear-gradient(135deg, var(--warning-color), #fd7e14);
+            color: white;
+        }
+        
+        .badge-danger {
+            background: linear-gradient(135deg, var(--danger-color), #e74c3c);
+            color: white;
+        }
+        
+        /* Loading Animation */
+        .loading-spinner {
+            border: 4px solid rgba(255, 107, 53, 0.1);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .main-header h1 {
+                font-size: 2rem;
+            }
+            
+            .chat-message {
+                max-width: 90%;
+            }
+            
+            .metric-card {
+                padding: 1.5rem;
+            }
+            
+            .exercise-details {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+        
+        /* Sidebar Styling */
+        .css-1d391kg {
+            background: linear-gradient(180deg, var(--primary-color), var(--secondary-color));
+        }
+        
+        .css-1d391kg .css-1v0mbdj {
+            color: white;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--light-color);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary-color);
+        }
+        
+        /* Stale Element Protection */
+        .stale-element-protection {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        
+        /* Success Messages */
+        .success-message {
+            background: linear-gradient(135deg, var(--success-color), #20c997);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            margin: 1rem 0;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        /* Error Messages */
+        .error-message {
+            background: linear-gradient(135deg, var(--danger-color), #e74c3c);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            margin: 1rem 0;
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+        }
+        
+        /* Info Messages */
+        .info-message {
+            background: linear-gradient(135deg, var(--accent-color), #764ba2);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            margin: 1rem 0;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Geliştirilmiş Günlük Program
-DAILY_PROGRAM = {
-    'hafta_1_2': {
-        'sabah': [
-            {
-                'exercise': 'pike push-up', 
-                'sets': 5, 
-                'reps': '8-12', 
-                'notes': '3sn negatif',
-                'rest': '60-90sn',
-                'tempo': '3-0-1-0'
+# Geliştirilmiş Exercise Data Structure
+class ExerciseDatabase:
+    def __init__(self):
+        self.exercises = self._initialize_exercises()
+        self.muscle_groups = self._initialize_muscle_groups()
+        self.difficulty_levels = self._initialize_difficulty_levels()
+    
+    def _initialize_exercises(self) -> Dict[str, Exercise]:
+        exercises_data = {
+            'pike_push_up': Exercise(
+                name='pike_push_up',
+                muscle_group=MuscleGroup.SHOULDERS,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_rep=0.8,
+                description='Omuz kaslarını güçlendiren etkili handstand progression hareketi',
+                progressions=['wall_handstand', 'handstand_push_up', 'freestanding_handstand']
+            ),
+            'diamond_push_up': Exercise(
+                name='diamond_push_up',
+                muscle_group=MuscleGroup.CHEST,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_rep=0.9,
+                description='Triceps ve iç göğüs kaslarını hedefleyen push-up varyasyonu',
+                progressions=['archer_push_up', 'one_arm_push_up', 'maltese_push_up']
+            ),
+            'bulgarian_split_squat': Exercise(
+                name='bulgarian_split_squat',
+                muscle_group=MuscleGroup.LEGS,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_rep=1.2,
+                description='Unilateral bacak gücü ve denge geliştiren egzersiz',
+                progressions=['jump_split_squat', 'weighted_bulgarian_split_squat', 'pistol_squat']
+            ),
+            'single_arm_push_up': Exercise(
+                name='single_arm_push_up',
+                muscle_group=MuscleGroup.CHEST,
+                difficulty=DifficultyLevel.ADVANCED,
+                calories_per_rep=2.0,
+                description='En zorlu push-up varyasyonu - tek kol ile yapılan push-up',
+                progressions=['maltese_push_up', 'planche_push_up']
+            ),
+            'archer_squat': Exercise(
+                name='archer_squat',
+                muscle_group=MuscleGroup.LEGS,
+                difficulty=DifficultyLevel.ADVANCED,
+                calories_per_rep=1.5,
+                description='Tek bacak squat progressionu - lateral güç geliştirici',
+                progressions=['pistol_squat', 'shrimp_squat', 'dragon_squat']
+            ),
+            'l_sit_hold': Exercise(
+                name='l_sit_hold',
+                muscle_group=MuscleGroup.CORE,
+                difficulty=DifficultyLevel.ADVANCED,
+                calories_per_second=0.2,
+                description='Core gücü, hip flexor esnekliği ve denge geliştiren static hold',
+                progressions=['v_sit', 'manna_hold', 'front_lever']
+            ),
+            'hollow_body_hold': Exercise(
+                name='hollow_body_hold',
+                muscle_group=MuscleGroup.CORE,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_second=0.15,
+                description='Core stabilizasyonu ve anterior chain gücü',
+                progressions=['hollow_body_rocks', 'dragon_flag', 'front_lever']
+            ),
+            'handstand_wall_walk': Exercise(
+                name='handstand_wall_walk',
+                muscle_group=MuscleGroup.SHOULDERS,
+                difficulty=DifficultyLevel.ADVANCED,
+                calories_per_rep=1.8,
+                description='Handstand progression - omuz gücü ve propriosepsiyon',
+                progressions=['freestanding_handstand', 'handstand_push_up', 'handstand_walk']
+            ),
+            'pistol_squat': Exercise(
+                name='pistol_squat',
+                muscle_group=MuscleGroup.LEGS,
+                difficulty=DifficultyLevel.ADVANCED,
+                calories_per_rep=2.2,
+                description='Tek bacak squat - unilateral güç ve mobility',
+                progressions=['jumping_pistol_squat', 'weighted_pistol_squat', 'shrimp_squat']
+            ),
+            'one_arm_plank': Exercise(
+                name='one_arm_plank',
+                muscle_group=MuscleGroup.CORE,
+                difficulty=DifficultyLevel.ADVANCED,
+                calories_per_second=0.25,
+                description='Asimetrik core stabilizasyonu ve anti-rotation',
+                progressions=['one_arm_one_leg_plank', 'side_plank_variations']
+            ),
+            'hindu_push_up': Exercise(
+                name='hindu_push_up',
+                muscle_group=MuscleGroup.CHEST,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_rep=1.1,
+                description='Flow movement - göğüs, omuz ve core kombine hareket',
+                progressions=['dive_bomber_push_up', 'hindu_push_up_to_downward_dog']
+            ),
+            'burpee': Exercise(
+                name='burpee',
+                muscle_group=MuscleGroup.FULL_BODY,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_rep=1.5,
+                description='Tüm vücut kondisyon ve metabolik egzersiz',
+                progressions=['burpee_box_jump', 'burpee_pull_up', 'burpee_tuck_jump']
+            ),
+            'push_up': Exercise(
+                name='push_up',
+                muscle_group=MuscleGroup.CHEST,
+                difficulty=DifficultyLevel.BEGINNER,
+                calories_per_rep=0.7,
+                description='Temel üst vücut güç egzersizi',
+                progressions=['incline_push_up', 'diamond_push_up', 'archer_push_up']
+            ),
+            'pull_up': Exercise(
+                name='pull_up',
+                muscle_group=MuscleGroup.BACK,
+                difficulty=DifficultyLevel.INTERMEDIATE,
+                calories_per_rep=1.3,
+                description='Sırt kasları ve biceps geliştiren temel çekme hareketi',
+                progressions=['weighted_pull_up', 'one_arm_pull_up', 'muscle_up']
+            ),
+            'squat': Exercise(
+                name='squat',
+                muscle_group=MuscleGroup.LEGS,
+                difficulty=DifficultyLevel.BEGINNER,
+                calories_per_rep=0.8,
+                description='Temel bacak egzersizi - quadriceps, glutes ve hamstrings',
+                progressions=['jump_squat', 'pistol_squat', 'shrimp_squat']
+            ),
+            'plank': Exercise(
+                name='plank',
+                muscle_group=MuscleGroup.CORE,
+                difficulty=DifficultyLevel.BEGINNER,
+                calories_per_second=0.1,
+                description='Core stabilizasyonu ve postural strength',
+                progressions=['side_plank', 'plank_to_push_up', 'one_arm_plank']
+            )
+        }
+        return exercises_data
+    
+    def _initialize_muscle_groups(self) -> Dict[MuscleGroup, Dict[str, str]]:
+        return {
+            MuscleGroup.CHEST: {'emoji': '🫴', 'name': 'Göğüs', 'color': '#FF6B35'},
+            MuscleGroup.BACK: {'emoji': '🔙', 'name': 'Sırt', 'color': '#36A2EB'},
+            MuscleGroup.LEGS: {'emoji': '🦵', 'name': 'Bacak', 'color': '#4BC0C0'},
+            MuscleGroup.CORE: {'emoji': '💪', 'name': 'Core', 'color': '#FFCE56'},
+            MuscleGroup.SHOULDERS: {'emoji': '🤲', 'name': 'Omuz', 'color': '#9966FF'},
+            MuscleGroup.ARMS: {'emoji': '💪', 'name': 'Kol', 'color': '#FF9F40'},
+            MuscleGroup.FULL_BODY: {'emoji': '🎯', 'name': 'Tüm Vücut', 'color': '#FF6384'}
+        }
+    
+    def _initialize_difficulty_levels(self) -> Dict[DifficultyLevel, Dict[str, Any]]:
+        return {
+            DifficultyLevel.BEGINNER: {'level': 1, 'color': '#28a745', 'emoji': '🟢', 'name': 'Başlangıç'},
+            DifficultyLevel.INTERMEDIATE: {'level': 2, 'color': '#ffc107', 'emoji': '🟡', 'name': 'Orta'},
+            DifficultyLevel.ADVANCED: {'level': 3, 'color': '#dc3545', 'emoji': '🔴', 'name': 'İleri'}
+        }
+    
+    def get_exercise(self, exercise_name: str) -> Optional[Exercise]:
+        return self.exercises.get(exercise_name.lower().replace(' ', '_').replace('-', '_'))
+    
+    def get_exercises_by_muscle_group(self, muscle_group: MuscleGroup) -> List[Exercise]:
+        return [ex for ex in self.exercises.values() if ex.muscle_group == muscle_group]
+    
+    def get_exercises_by_difficulty(self, difficulty: DifficultyLevel) -> List[Exercise]:
+        return [ex for ex in self.exercises.values() if ex.difficulty == difficulty]
+    
+    def search_exercises(self, query: str) -> List[Exercise]:
+        query = query.lower()
+        return [ex for ex in self.exercises.values() 
+                if query in ex.name.lower() or query in ex.description.lower()]
+
+# Geliştirilmiş Workout Program Structure
+class WorkoutProgram:
+    def __init__(self):
+        self.program_data = self._initialize_program_data()
+    
+    def _initialize_program_data(self) -> Dict[str, Dict[str, List[WorkoutSet]]]:
+        return {
+            'hafta_1_2': {
+                'sabah': [
+                    WorkoutSet('pike_push_up', 5, '8-12', '3sn negatif', '60-90sn', '3-0-1-0'),
+                    WorkoutSet('diamond_push_up', 5, '6-10', '2sn pause', '60-90sn', '2-2-1-0'),
+                    WorkoutSet('bulgarian_split_squat', 5, '15/15', 'tempo: 3-1-2-1', '90sn', '3-1-2-1'),
+                    WorkoutSet('single_arm_push_up', 4, '5/5', 'duvar destekli', '120sn', '2-0-2-0'),
+                    WorkoutSet('archer_squat', 4, '8/8', 'kontrollü hareket', '90sn', '3-1-2-1'),
+                    WorkoutSet('l_sit_hold', 5, '15-30sn', 'progression odaklı', '90sn', 'static'),
+                    WorkoutSet('hollow_body_hold', 3, '45-60sn', 'nefes kontrol', '60sn', 'static'),
+                    WorkoutSet('handstand_wall_walk', 4, '5 adım', 'omuz mobility', '120sn', 'controlled')
+                ],
+                'aksam': [
+                    WorkoutSet('pistol_squat', 4, '5/5', 'progression', '120sn', '3-1-2-1'),
+                    WorkoutSet('one_arm_plank', 3, '20sn/taraf', 'core activation', '90sn', 'static'),
+                    WorkoutSet('hindu_push_up', 3, '12-15', 'flow movement', '60sn', 'smooth'),
+                    WorkoutSet('burpee', 3, '10', 'to tuck jump', '90sn', 'explosive')
+                ]
             },
-            {
-                'exercise': 'diamond push-up', 
-                'sets': 5, 
-                'reps': '6-10', 
-                'notes': '2sn pause',
-                'rest': '60-90sn',
-                'tempo': '2-2-1-0'
-            },
-            {
-                'exercise': 'bulgarian split squat', 
-                'sets': 5, 
-                'reps': '15/15', 
-                'notes': 'tempo: 3-1-2-1',
-                'rest': '90sn',
-                'tempo': '3-1-2-1'
-            },
-            {
-                'exercise': 'single arm push-up', 
-                'sets': 4, 
-                'reps': '5/5', 
-                'notes': 'duvar destekli',
-                'rest': '120sn',
-                'tempo': '2-0-2-0'
-            },
-            {
-                'exercise': 'archer squat', 
-                'sets': 4, 
-                'reps': '8/8', 
-                'notes': 'kontrollü hareket',
-                'rest': '90sn',
-                'tempo': '3-1-2-1'
-            },
-            {
-                'exercise': 'l-sit hold', 
-                'sets': 5, 
-                'reps': '15-30sn', 
-                'notes': 'progression odaklı',
-                'rest': '90sn',
-                'tempo': 'static'
-            },
-            {
-                'exercise': 'hollow body hold', 
-                'sets': 3, 
-                'reps': '45-60sn', 
-                'notes': 'nefes kontrol',
-                'rest': '60sn',
-                'tempo': 'static'
-            },
-            {
-                'exercise': 'handstand wall walk', 
-                'sets': 4, 
-                'reps': '5 adım', 
-                'notes': 'omuz mobility',
-                'rest': '120sn',
-                'tempo': 'controlled'
-            }
-        ],
-        'aksam': [
-            {
-                'exercise': 'pistol squat', 
-                'sets': 4, 
-                'reps': '5/5', 
-                'notes': 'progression',
-                'rest': '120sn',
-                'tempo': '3-1-2-1'
-            },
-            {
-                'exercise': 'one arm plank', 
-                'sets': 3, 
-                'reps': '20sn/taraf', 
-                'notes': 'core activation',
-                'rest': '90sn',
-                'tempo': 'static'
-            },
-            {
-                'exercise': 'hindu push-up', 
-                'sets': 3, 
-                'reps': '12-15', 
-                'notes': 'flow movement',
-                'rest': '60sn',
-                'tempo': 'smooth'
-            },
-            {
-                'exercise': 'burpee', 
-                'sets': 3, 
-                'reps': '10', 
-                'notes': 'to tuck jump',
-                'rest': '90sn',
-                'tempo': 'explosive'
-            }
-        ]
-    },
     'hafta_3_4': {
         'sabah': [
             {
