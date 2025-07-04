@@ -411,17 +411,17 @@ def main():
     if not db:
         st.error("🔴 Veritabanı bağlantısı kurulamadı!")
         return
-    
-   try:
-    user_data = db.users.find_one({"_id": ObjectId(user_id)})
-    if not user_data:
-        st.error("❌ Kullanıcı bulunamadı!")
-        st.session_state.user_id = None
-        st.rerun()
+
+    try:
+        user_data = db.users.find_one({"_id": ObjectId(user_id)})
+        if not user_data:
+            st.error("❌ Kullanıcı bulunamadı!")
+            st.session_state.user_id = None
+            st.rerun()
+            return
+    except Exception as e:
+        st.error(f"🔴 Kullanıcı bilgileri alınamadı: {e}")
         return
-except Exception as e:
-    st.error(f"🔴 Kullanıcı bilgileri alınamadı: {e}")
-    return
 
 # Sidebar - Kullanıcı profili
 with st.sidebar:
