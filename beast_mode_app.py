@@ -12,6 +12,15 @@ from pymongo import MongoClient
 import uuid
 import re
 import hashlib
+import logging
+from typing import Dict, List, Optional, Any
+from functools import lru_cache
+import asyncio
+import aiohttp
+
+# Logging konfigürasyonu
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Sayfa konfigürasyonu
 st.set_page_config(
@@ -21,56 +30,108 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS Stilleri
+# Geliştirilmiş CSS Stilleri
 st.markdown("""
 <style>
     .main-header {
         background: linear-gradient(135deg, #FF6B35, #F7931E);
         padding: 2rem;
-        border-radius: 10px;
+        border-radius: 15px;
         color: white;
         text-align: center;
         margin-bottom: 2rem;
+        box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
+        backdrop-filter: blur(10px);
     }
     .metric-card {
         background: white;
         padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         border-left: 4px solid #FF6B35;
+        transition: transform 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-5px);
     }
     .chat-message {
-        padding: 0.8rem;
+        padding: 1rem;
         margin: 0.5rem 0;
-        border-radius: 10px;
+        border-radius: 15px;
         max-width: 70%;
+        animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     .user-message {
-        background-color: #FF6B35;
+        background: linear-gradient(135deg, #FF6B35, #F7931E);
         color: white;
         margin-left: 30%;
+        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
     }
     .ai-message {
-        background-color: #f0f2f6;
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
         color: #333;
         margin-right: 30%;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     .exercise-card {
         background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #ddd;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
         margin: 0.5rem 0;
+        transition: all 0.3s ease;
+    }
+    .exercise-card:hover {
+        border-color: #FF6B35;
+        box-shadow: 0 4px 20px rgba(255, 107, 53, 0.2);
     }
     .program-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
+        padding: 2rem;
+        border-radius: 15px;
         margin: 1rem 0;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+    }
+    .progress-bar {
+        background: #e0e0e0;
+        border-radius: 10px;
+        height: 20px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        background: linear-gradient(90deg, #FF6B35, #F7931E);
+        height: 100%;
+        transition: width 0.3s ease;
     }
     .stAlert {
-        border-radius: 10px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .success-badge {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
+    .loading-spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #FF6B35;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -80,157 +141,517 @@ GROQ_API_KEY = "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"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MONGODB_URI = "mongodb+srv://dyaloshwester:b9eoq3Hriw3ncm65@cluster0.x6sungc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
-# Beast Mode Verileri
+# Geliştirilmiş Beast Mode Verileri
 BEAST_MODE_DATA = {
     'exercises': {
-        'pike push-up': {'muscle_group': 'shoulders', 'difficulty': 'intermediate'},
-        'diamond push-up': {'muscle_group': 'chest', 'difficulty': 'intermediate'},
-        'bulgarian split squat': {'muscle_group': 'legs', 'difficulty': 'intermediate'},
-        'single arm push-up': {'muscle_group': 'chest', 'difficulty': 'advanced'},
-        'archer squat': {'muscle_group': 'legs', 'difficulty': 'advanced'},
-        'l-sit hold': {'muscle_group': 'core', 'difficulty': 'advanced'},
-        'hollow body hold': {'muscle_group': 'core', 'difficulty': 'intermediate'},
-        'handstand wall walk': {'muscle_group': 'shoulders', 'difficulty': 'advanced'},
-        'pistol squat': {'muscle_group': 'legs', 'difficulty': 'advanced'},
-        'one arm plank': {'muscle_group': 'core', 'difficulty': 'advanced'},
-        'hindu push-up': {'muscle_group': 'chest', 'difficulty': 'intermediate'},
-        'burpee': {'muscle_group': 'full_body', 'difficulty': 'intermediate'},
-        'push-up': {'muscle_group': 'chest', 'difficulty': 'beginner'},
-        'pull-up': {'muscle_group': 'back', 'difficulty': 'intermediate'},
-        'squat': {'muscle_group': 'legs', 'difficulty': 'beginner'},
-        'plank': {'muscle_group': 'core', 'difficulty': 'beginner'}
+        'pike push-up': {
+            'muscle_group': 'shoulders', 
+            'difficulty': 'intermediate',
+            'calories_per_rep': 0.8,
+            'description': 'Omuz kaslarını güçlendiren etkili hareket',
+            'progressions': ['wall handstand', 'handstand push-up']
+        },
+        'diamond push-up': {
+            'muscle_group': 'chest', 
+            'difficulty': 'intermediate',
+            'calories_per_rep': 0.9,
+            'description': 'Triceps ve göğüs odaklı push-up varyasyonu',
+            'progressions': ['archer push-up', 'one arm push-up']
+        },
+        'bulgarian split squat': {
+            'muscle_group': 'legs', 
+            'difficulty': 'intermediate',
+            'calories_per_rep': 1.2,
+            'description': 'Unilateral bacak antrenmanı',
+            'progressions': ['jump split squat', 'pistol squat']
+        },
+        'single arm push-up': {
+            'muscle_group': 'chest', 
+            'difficulty': 'advanced',
+            'calories_per_rep': 2.0,
+            'description': 'En zorlu push-up varyasyonu',
+            'progressions': ['maltese push-up']
+        },
+        'archer squat': {
+            'muscle_group': 'legs', 
+            'difficulty': 'advanced',
+            'calories_per_rep': 1.5,
+            'description': 'Tek bacak squat progression',
+            'progressions': ['pistol squat', 'shrimp squat']
+        },
+        'l-sit hold': {
+            'muscle_group': 'core', 
+            'difficulty': 'advanced',
+            'calories_per_second': 0.2,
+            'description': 'Core gücü ve denge',
+            'progressions': ['v-sit', 'manna hold']
+        },
+        'hollow body hold': {
+            'muscle_group': 'core', 
+            'difficulty': 'intermediate',
+            'calories_per_second': 0.15,
+            'description': 'Core stabilizasyonu',
+            'progressions': ['hollow body rocks', 'dragon flag']
+        },
+        'handstand wall walk': {
+            'muscle_group': 'shoulders', 
+            'difficulty': 'advanced',
+            'calories_per_rep': 1.8,
+            'description': 'Handstand progression',
+            'progressions': ['freestanding handstand', 'handstand push-up']
+        },
+        'pistol squat': {
+            'muscle_group': 'legs', 
+            'difficulty': 'advanced',
+            'calories_per_rep': 2.2,
+            'description': 'Tek bacak squat',
+            'progressions': ['jumping pistol squat', 'weighted pistol squat']
+        },
+        'one arm plank': {
+            'muscle_group': 'core', 
+            'difficulty': 'advanced',
+            'calories_per_second': 0.25,
+            'description': 'Asimetrik core egzersizi',
+            'progressions': ['one arm one leg plank']
+        },
+        'hindu push-up': {
+            'muscle_group': 'chest', 
+            'difficulty': 'intermediate',
+            'calories_per_rep': 1.1,
+            'description': 'Flow hareketi',
+            'progressions': ['dive bomber push-up']
+        },
+        'burpee': {
+            'muscle_group': 'full_body', 
+            'difficulty': 'intermediate',
+            'calories_per_rep': 1.5,
+            'description': 'Tüm vücut kondisyon',
+            'progressions': ['burpee box jump', 'burpee pull-up']
+        },
+        'push-up': {
+            'muscle_group': 'chest', 
+            'difficulty': 'beginner',
+            'calories_per_rep': 0.7,
+            'description': 'Temel üst vücut egzersizi',
+            'progressions': ['incline push-up', 'diamond push-up']
+        },
+        'pull-up': {
+            'muscle_group': 'back', 
+            'difficulty': 'intermediate',
+            'calories_per_rep': 1.3,
+            'description': 'Sırt ve biceps geliştirici',
+            'progressions': ['weighted pull-up', 'one arm pull-up']
+        },
+        'squat': {
+            'muscle_group': 'legs', 
+            'difficulty': 'beginner',
+            'calories_per_rep': 0.8,
+            'description': 'Temel bacak egzersizi',
+            'progressions': ['jump squat', 'pistol squat']
+        },
+        'plank': {
+            'muscle_group': 'core', 
+            'difficulty': 'beginner',
+            'calories_per_second': 0.1,
+            'description': 'Core stabilizasyonu',
+            'progressions': ['side plank', 'plank to push-up']
+        }
     },
     'muscle_groups': {
-        'chest': '🫴 Göğüs',
-        'back': '🔙 Sırt', 
-        'legs': '🦵 Bacak',
-        'core': '💪 Core',
-        'shoulders': '🤲 Omuz',
-        'arms': '💪 Kol',
-        'full_body': '🎯 Tüm Vücut'
+        'chest': {'emoji': '🫴', 'name': 'Göğüs', 'color': '#FF6B35'},
+        'back': {'emoji': '🔙', 'name': 'Sırt', 'color': '#36A2EB'}, 
+        'legs': {'emoji': '🦵', 'name': 'Bacak', 'color': '#4BC0C0'},
+        'core': {'emoji': '💪', 'name': 'Core', 'color': '#FFCE56'},
+        'shoulders': {'emoji': '🤲', 'name': 'Omuz', 'color': '#9966FF'},
+        'arms': {'emoji': '💪', 'name': 'Kol', 'color': '#FF9F40'},
+        'full_body': {'emoji': '🎯', 'name': 'Tüm Vücut', 'color': '#FF6384'}
+    },
+    'difficulty_levels': {
+        'beginner': {'level': 1, 'color': '#28a745', 'emoji': '🟢'},
+        'intermediate': {'level': 2, 'color': '#ffc107', 'emoji': '🟡'},
+        'advanced': {'level': 3, 'color': '#dc3545', 'emoji': '🔴'}
     }
 }
 
-# Günlük Program
+# Geliştirilmiş Günlük Program
 DAILY_PROGRAM = {
     'hafta_1_2': {
         'sabah': [
-            {'exercise': 'pike push-up', 'sets': 5, 'reps': '8-12', 'notes': '3sn negatif'},
-            {'exercise': 'diamond push-up', 'sets': 5, 'reps': '6-10', 'notes': '2sn pause'},
-            {'exercise': 'bulgarian split squat', 'sets': 5, 'reps': '15/15', 'notes': 'tempo: 3-1-2-1'},
-            {'exercise': 'single arm push-up', 'sets': 4, 'reps': '5/5', 'notes': 'duvar destekli'},
-            {'exercise': 'archer squat', 'sets': 4, 'reps': '8/8', 'notes': ''},
-            {'exercise': 'l-sit hold', 'sets': 5, 'reps': '15-30sn', 'notes': ''},
-            {'exercise': 'hollow body hold', 'sets': 3, 'reps': '45-60sn', 'notes': ''},
-            {'exercise': 'handstand wall walk', 'sets': 4, 'reps': '5 adım', 'notes': ''}
+            {
+                'exercise': 'pike push-up', 
+                'sets': 5, 
+                'reps': '8-12', 
+                'notes': '3sn negatif',
+                'rest': '60-90sn',
+                'tempo': '3-0-1-0'
+            },
+            {
+                'exercise': 'diamond push-up', 
+                'sets': 5, 
+                'reps': '6-10', 
+                'notes': '2sn pause',
+                'rest': '60-90sn',
+                'tempo': '2-2-1-0'
+            },
+            {
+                'exercise': 'bulgarian split squat', 
+                'sets': 5, 
+                'reps': '15/15', 
+                'notes': 'tempo: 3-1-2-1',
+                'rest': '90sn',
+                'tempo': '3-1-2-1'
+            },
+            {
+                'exercise': 'single arm push-up', 
+                'sets': 4, 
+                'reps': '5/5', 
+                'notes': 'duvar destekli',
+                'rest': '120sn',
+                'tempo': '2-0-2-0'
+            },
+            {
+                'exercise': 'archer squat', 
+                'sets': 4, 
+                'reps': '8/8', 
+                'notes': 'kontrollü hareket',
+                'rest': '90sn',
+                'tempo': '3-1-2-1'
+            },
+            {
+                'exercise': 'l-sit hold', 
+                'sets': 5, 
+                'reps': '15-30sn', 
+                'notes': 'progression odaklı',
+                'rest': '90sn',
+                'tempo': 'static'
+            },
+            {
+                'exercise': 'hollow body hold', 
+                'sets': 3, 
+                'reps': '45-60sn', 
+                'notes': 'nefes kontrol',
+                'rest': '60sn',
+                'tempo': 'static'
+            },
+            {
+                'exercise': 'handstand wall walk', 
+                'sets': 4, 
+                'reps': '5 adım', 
+                'notes': 'omuz mobility',
+                'rest': '120sn',
+                'tempo': 'controlled'
+            }
         ],
         'aksam': [
-            {'exercise': 'pistol squat', 'sets': 4, 'reps': '5/5', 'notes': 'progression'},
-            {'exercise': 'one arm plank', 'sets': 3, 'reps': '20sn/taraf', 'notes': ''},
-            {'exercise': 'hindu push-up', 'sets': 3, 'reps': '12-15', 'notes': ''},
-            {'exercise': 'burpee', 'sets': 3, 'reps': '10', 'notes': 'to tuck jump'}
+            {
+                'exercise': 'pistol squat', 
+                'sets': 4, 
+                'reps': '5/5', 
+                'notes': 'progression',
+                'rest': '120sn',
+                'tempo': '3-1-2-1'
+            },
+            {
+                'exercise': 'one arm plank', 
+                'sets': 3, 
+                'reps': '20sn/taraf', 
+                'notes': 'core activation',
+                'rest': '90sn',
+                'tempo': 'static'
+            },
+            {
+                'exercise': 'hindu push-up', 
+                'sets': 3, 
+                'reps': '12-15', 
+                'notes': 'flow movement',
+                'rest': '60sn',
+                'tempo': 'smooth'
+            },
+            {
+                'exercise': 'burpee', 
+                'sets': 3, 
+                'reps': '10', 
+                'notes': 'to tuck jump',
+                'rest': '90sn',
+                'tempo': 'explosive'
+            }
+        ]
+    },
+    'hafta_3_4': {
+        'sabah': [
+            {
+                'exercise': 'pike push-up', 
+                'sets': 6, 
+                'reps': '10-15', 
+                'notes': '4sn negatif',
+                'rest': '60-90sn',
+                'tempo': '4-0-1-0'
+            },
+            {
+                'exercise': 'diamond push-up', 
+                'sets': 6, 
+                'reps': '8-12', 
+                'notes': '3sn pause',
+                'rest': '60-90sn',
+                'tempo': '3-3-1-0'
+            },
+            {
+                'exercise': 'bulgarian split squat', 
+                'sets': 6, 
+                'reps': '18/18', 
+                'notes': 'ağırlık ekle',
+                'rest': '90sn',
+                'tempo': '3-1-2-1'
+            }
         ]
     }
 }
 
+# Geliştirilmiş Beslenme Planı
 NUTRITION_PLAN = {
-    '05:30': '500ml su',
-    '06:00': '1 muz + kahve',
-    '06:15-07:00': 'Sabah antrenmanı',
-    '07:15': 'Protein shake + bal',
-    '08:00': 'Kahvaltı',
-    '11:00': 'Ara öğün',
-    '13:30': 'Öğle yemeği',
-    '16:00': 'Pre-workout atıştırmalık',
-    '17:30-18:30': 'Akşam antrenmanı',
-    '18:45': 'Süt + muz',
-    '20:00': 'Akşam yemeği',
-    '22:00': 'Casein + kuruyemiş',
-    '22:30': 'Yatma'
+    'schedule': {
+        '05:30': {'item': '500ml su', 'type': 'hydration', 'calories': 0},
+        '06:00': {'item': '1 muz + kahve', 'type': 'pre_workout', 'calories': 120},
+        '06:15-07:00': {'item': 'Sabah antrenmanı', 'type': 'workout', 'calories': -300},
+        '07:15': {'item': 'Protein shake + bal', 'type': 'post_workout', 'calories': 200},
+        '08:00': {'item': 'Kahvaltı', 'type': 'meal', 'calories': 500},
+        '11:00': {'item': 'Ara öğün', 'type': 'snack', 'calories': 200},
+        '13:30': {'item': 'Öğle yemeği', 'type': 'meal', 'calories': 600},
+        '16:00': {'item': 'Pre-workout atıştırmalık', 'type': 'pre_workout', 'calories': 150},
+        '17:30-18:30': {'item': 'Akşam antrenmanı', 'type': 'workout', 'calories': -400},
+        '18:45': {'item': 'Süt + muz', 'type': 'post_workout', 'calories': 180},
+        '20:00': {'item': 'Akşam yemeği', 'type': 'meal', 'calories': 700},
+        '22:00': {'item': 'Casein + kuruyemiş', 'type': 'pre_sleep', 'calories': 250},
+        '22:30': {'item': 'Yatma', 'type': 'sleep', 'calories': 0}
+    },
+    'meal_suggestions': {
+        'kahvalti': [
+            'Yumurta + avokado + tam tahıl ekmek',
+            'Protein pancake + meyve',
+            'Overnight oats + protein tozu',
+            'Menemen + peynir + domates'
+        ],
+        'ara_ogun': [
+            'Yunan yoğurtu + nuts',
+            'Protein bar + meyve',
+            'Kuruyemiş karışımı',
+            'Süt + hurma'
+        ],
+        'ogle': [
+            'Tavuk + quinoa + sebze',
+            'Somon + tatlı patates + salata',
+            'Köfte + bulgur + yogurt',
+            'Ton balığı + avokado toast'
+        ],
+        'aksam': [
+            'Biftek + patates + brokoli',
+            'Tavuk + pirinç + sebze',
+            'Balık + quinoa + ıspanak',
+            'Köri + nohut + pirinç'
+        ]
+    }
 }
 
+# Geliştirilmiş Supplement Planı
 SUPPLEMENTS = [
-    {'name': 'Whey Protein', 'dosage': '30g (2x)'},
-    {'name': 'Kreatin Monohydrate', 'dosage': '5g (18+ yaş)'},
-    {'name': 'Multivitamin', 'dosage': '1 tablet'},
-    {'name': 'Omega-3', 'dosage': '2-3g'},
-    {'name': 'Magnezyum', 'dosage': '400mg'},
-    {'name': 'Çinko', 'dosage': '15mg'},
-    {'name': 'D3 Vitamini', 'dosage': '2000 IU'}
+    {
+        'name': 'Whey Protein', 
+        'dosage': '30g (2x)', 
+        'timing': 'Post-workout & Evening',
+        'benefits': 'Kas protein sentezi',
+        'priority': 'high'
+    },
+    {
+        'name': 'Kreatin Monohydrate', 
+        'dosage': '5g (18+ yaş)', 
+        'timing': 'Her zaman',
+        'benefits': 'Güç ve performans',
+        'priority': 'high'
+    },
+    {
+        'name': 'Multivitamin', 
+        'dosage': '1 tablet', 
+        'timing': 'Sabah',
+        'benefits': 'Genel sağlık',
+        'priority': 'medium'
+    },
+    {
+        'name': 'Omega-3', 
+        'dosage': '2-3g', 
+        'timing': 'Yemekle',
+        'benefits': 'İnflamasyon kontrolü',
+        'priority': 'high'
+    },
+    {
+        'name': 'Magnezyum', 
+        'dosage': '400mg', 
+        'timing': 'Akşam',
+        'benefits': 'Kas gevşemesi, uyku',
+        'priority': 'medium'
+    },
+    {
+        'name': 'Çinko', 
+        'dosage': '15mg', 
+        'timing': 'Aç karnına',
+        'benefits': 'Bağışıklık, testosteron',
+        'priority': 'medium'
+    },
+    {
+        'name': 'D3 Vitamini', 
+        'dosage': '2000 IU', 
+        'timing': 'Sabah',
+        'benefits': 'Kemik sağlığı, hormonlar',
+        'priority': 'high'
+    }
 ]
 
-# Utility Functions
-def hash_password(password):
-    """Şifreyi hash'le"""
-    return hashlib.sha256(password.encode()).hexdigest()
+# Geliştirilmiş Utility Functions
+def hash_password(password: str) -> str:
+    """Güvenli şifre hash'leme"""
+    salt = "beast_mode_salt_2024"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
 
-def verify_password(password, hashed_password):
-    """Şifreyi doğrula"""
-    return hashlib.sha256(password.encode()).hexdigest() == hashed_password
+def verify_password(password: str, hashed_password: str) -> bool:
+    """Şifre doğrulama"""
+    return hash_password(password) == hashed_password
 
-# MongoDB Bağlantısı
+def calculate_beast_score(user_data: Dict, recent_workouts: List = None) -> int:
+    """Beast Mode skoru hesapla"""
+    base_score = 50
+    
+    # Yaş faktörü
+    age = user_data.get('age', 25)
+    if age < 25:
+        base_score += 10
+    elif age > 35:
+        base_score -= 5
+    
+    # Antrenman sıklığı
+    if recent_workouts:
+        workout_count = len(recent_workouts)
+        base_score += min(workout_count * 5, 25)
+    
+    # Hedef faktörü
+    goal = user_data.get('goal', 'general')
+    if goal == 'muscle_gain':
+        base_score += 5
+    elif goal == 'strength':
+        base_score += 10
+    
+    return min(max(base_score, 0), 100)
+
+def format_exercise_name(exercise: str) -> str:
+    """Egzersiz adını formatla"""
+    return exercise.replace('_', ' ').replace('-', ' ').title()
+
+def get_exercise_emoji(exercise: str) -> str:
+    """Egzersiz için emoji getir"""
+    muscle_group = BEAST_MODE_DATA['exercises'].get(exercise, {}).get('muscle_group', 'full_body')
+    return BEAST_MODE_DATA['muscle_groups'].get(muscle_group, {}).get('emoji', '💪')
+
+def calculate_workout_calories(exercises: List[Dict]) -> float:
+    """Antrenman kalori hesapla"""
+    total_calories = 0
+    for ex in exercises:
+        exercise_name = ex.get('exercise', '')
+        sets = ex.get('sets', 1)
+        reps = ex.get('reps', 10)
+        
+        # Reps string olabilir ("8-12" gibi)
+        if isinstance(reps, str):
+            reps = int(reps.split('-')[0]) if '-' in reps else 10
+        
+        exercise_data = BEAST_MODE_DATA['exercises'].get(exercise_name, {})
+        calories_per_rep = exercise_data.get('calories_per_rep', 0.5)
+        
+        total_calories += sets * reps * calories_per_rep
+    
+    return round(total_calories, 1)
+
+# Geliştirilmiş MongoDB İşlemleri
 @st.cache_resource
 def init_mongodb():
+    """MongoDB bağlantısını başlat"""
     try:
-        # En basit bağlantı
-        client = MongoClient(MONGODB_URI)
+        client = MongoClient(
+            MONGODB_URI,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            socketTimeoutMS=5000,
+            maxPoolSize=10,
+            retryWrites=True
+        )
+        
+        # Ping test
         client.admin.command('ping')
-        st.success("✅ MongoDB Atlas bağlantısı başarılı!")
-        return client['beast_mode']
+        logger.info("MongoDB Atlas bağlantısı başarılı")
+        
+        db = client['beast_mode']
+        setup_collections(db)
+        
+        return db
+        
     except Exception as e:
+        logger.error(f"MongoDB bağlantı hatası: {str(e)}")
         st.error(f"❌ MongoDB bağlantı hatası: {str(e)}")
-        return create_offline_db()
-
-def create_offline_db():
-    """Offline demo veritabanı oluştur"""
-    st.warning("⚠️ MongoDB bağlantısı başarısız - Offline demo modunda çalışıyor")
+        return None
 
 def setup_collections(db):
     """MongoDB koleksiyonlarını ve index'lerini ayarla"""
     try:
-        # Users koleksiyonu
-        if 'users' not in db.list_collection_names():
-            db.create_collection('users')
+        collections_config = {
+            'users': [
+                ('username', 1, {'unique': True}),
+                ('email', 1, {'unique': True, 'sparse': True}),
+                ('created_at', -1)
+            ],
+            'chats': [
+                ('user_id', 1),
+                ('timestamp', -1),
+                (['user_id', 'session_id'], 1)
+            ],
+            'workouts': [
+                ('user_id', 1),
+                ('date', -1),
+                (['user_id', 'date'], 1)
+            ],
+            'progress': [
+                ('user_id', 1),
+                ('date', -1),
+                (['user_id', 'date'], 1, {'unique': True})
+            ]
+        }
         
-        # Username için unique index
-        try:
-            db.users.create_index('username', unique=True)
-        except:
-            pass  # Index zaten varsa devam et
+        for collection_name, indexes in collections_config.items():
+            if collection_name not in db.list_collection_names():
+                db.create_collection(collection_name)
+            
+            collection = db[collection_name]
+            
+            for index_config in indexes:
+                try:
+                    if len(index_config) == 2:
+                        field, direction = index_config
+                        collection.create_index([(field, direction)])
+                    elif len(index_config) == 3:
+                        field, direction, options = index_config
+                        if isinstance(field, list):
+                            collection.create_index([(f, direction) for f in field], **options)
+                        else:
+                            collection.create_index([(field, direction)], **options)
+                except pymongo.errors.DuplicateKeyError:
+                    pass  # Index zaten mevcut
+                except Exception as e:
+                    logger.warning(f"Index oluşturma hatası: {e}")
         
-        # Chats koleksiyonu
-        if 'chats' not in db.list_collection_names():
-            db.create_collection('chats')
-        
-        # User_id ve timestamp için index
-        try:
-            db.chats.create_index([('user_id', 1), ('timestamp', -1)])
-        except:
-            pass
-        
-        # Workouts koleksiyonu
-        if 'workouts' not in db.list_collection_names():
-            db.create_collection('workouts')
-        
-        try:
-            db.workouts.create_index([('user_id', 1), ('date', -1)])
-        except:
-            pass
-        
-        # Progress koleksiyonu
-        if 'progress' not in db.list_collection_names():
-            db.create_collection('progress')
-        
-        try:
-            db.progress.create_index([('user_id', 1), ('date', -1)])
-        except:
-            pass
+        logger.info("MongoDB koleksiyonları hazırlandı")
         
     except Exception as e:
-        st.error(f"Koleksiyon ayarlama hatası: {e}")
+        logger.error(f"Koleksiyon ayarlama hatası: {e}")
 
-# Session State Initialization
+# Geliştirilmiş Session State
 def init_session_state():
+    """Session state'i başlat"""
     default_values = {
         'authenticated': False,
         'current_user': None,
@@ -238,7 +659,15 @@ def init_session_state():
         'exercise_log': [],
         'beast_mode_score': 75,
         'db': None,
-        'chat_session_id': None
+        'chat_session_id': None,
+        'loading': False,
+        'last_workout_date': None,
+        'weekly_stats': {},
+        'notification_settings': {
+            'workout_reminder': True,
+            'meal_reminder': True,
+            'progress_update': True
+        }
     }
     
     for key, value in default_values.items():
@@ -248,9 +677,13 @@ def init_session_state():
     # MongoDB bağlantısını başlat
     if st.session_state.db is None:
         st.session_state.db = init_mongodb()
+    
+    # Chat session ID oluştur
+    if st.session_state.chat_session_id is None:
+        st.session_state.chat_session_id = str(uuid.uuid4())
 
-# MongoDB İşlemleri
-def save_user_to_db(user_data):
+# Geliştirilmiş Kullanıcı İşlemleri
+def save_user_to_db(user_data: Dict) -> bool:
     """Kullanıcıyı veritabanına kaydet"""
     if not st.session_state.db:
         return False
@@ -260,13 +693,24 @@ def save_user_to_db(user_data):
         user_data['password'] = hash_password(user_data['password'])
         user_data['created_at'] = datetime.now()
         user_data['updated_at'] = datetime.now()
+        user_data['beast_mode_score'] = calculate_beast_score(user_data)
+        user_data['total_workouts'] = 0
+        user_data['streak_days'] = 0
+        user_data['last_login'] = datetime.now()
         
         result = st.session_state.db.users.insert_one(user_data)
-        return bool(result.inserted_id)
+        
+        if result.inserted_id:
+            logger.info(f"Yeni kullanıcı kaydedildi: {user_data['username']}")
+            return True
+            
+        return False
+        
     except pymongo.errors.DuplicateKeyError:
-        st.error("❌ Bu kullanıcı adı zaten kullanılıyor!")
+        st.error("❌ Bu kullanıcı adı veya email zaten kullanılıyor!")
         return False
     except Exception as e:
+        logger.error(f"Kullanıcı kayıt hatası: {e}")
         st.error(f"❌ Kayıt hatası: {e}")
         return False
 
