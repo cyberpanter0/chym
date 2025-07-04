@@ -412,26 +412,29 @@ def main():
         st.error("🔴 Veritabanı bağlantısı kurulamadı!")
         return
     
-    try:
-        user_data = db.users.find_one({"_id": ObjectId(user_id)})
-        if not user_data:
-            st.error("❌ Kullanıcı bulunamadı!")
-            st.session_state.user_id = None
-            st.rerun()
-            return
-    except Exception as e:
-        st.error(f"🔴 Kullanıcı bilgileri alınamadı: {e}")
+   try:
+    user_data = db.users.find_one({"_id": ObjectId(user_id)})
+    if not user_data:
+        st.error("❌ Kullanıcı bulunamadı!")
+        st.session_state.user_id = None
+        st.rerun()
         return
-    
+except Exception as e:
+    st.error(f"🔴 Kullanıcı bilgileri alınamadı: {e}")
+    return
+
 # Sidebar - Kullanıcı profili
 with st.sidebar:
-    st.markdown(f"""
-    <div class="main-header">
-        <h2>👋 Hoş geldin!</h2>
-        <h3>{user_data['full_name']}</h3>
-        <p>Hafta {user_data.get('program_week', 1)}/12</p>
-    </div>
-    """, unsafe_allow_html=True)
+    if user_data:
+        st.markdown(f"""
+        <div class="main-header">
+            <h2>👋 Hoş geldin!</h2>
+            <h3>{user_data.get('full_name', 'Kullanıcı adı yok')}</h3>
+            <p>Hafta {user_data.get('program_week', 1)}/12</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("Kullanıcı verisi bulunamadı.")
     
     # Hızlı istatistikler
     st.markdown("### 📊 Hızlı Bakış")
