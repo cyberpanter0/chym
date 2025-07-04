@@ -28,11 +28,29 @@ def init_mongodb():
 # Groq AI istemcisi
 @st.cache_resource
 def init_groq():
-    return Groq(api_key=GROQ_API_KEY)
+    try:
+        return Groq(api_key=GROQ_API_KEY)
+    except Exception as e:
+        st.error(f"Groq AI bağlantı hatası: {e}")
+        return None
 
 # Şifre hashleme
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+# Veri tiplerini MongoDB'ye uygun hale getirme
+def sanitize_data(data):
+    """MongoDB'ye uygun veri tiplerini düzelt"""
+    if isinstance(data, dict):
+        return {k: sanitize_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_data(v) for v in data]
+    elif hasattr(data, 'item'):  # numpy types
+        return data.item()
+    elif hasattr(data, 'date'):  # datetime.date objects
+        return datetime.combine(data, datetime.min.time())
+    else:
+        return data
 
 # Kişiselleştirilmiş program verisi
 PERSONAL_PROGRAM = {
@@ -110,16 +128,19 @@ def user_auth():
         
         if st.button("Giriş Yap"):
             if username and password:
-                user = db.users.find_one({
-                    "username": username,
-                    "password": hash_password(password)
-                })
-                if user:
-                    st.session_state.user_id = str(user["_id"])
-                    st.success("Giriş başarılı!")
-                    st.rerun()
-                else:
-                    st.error("Kullanıcı adı veya şifre yanlış!")
+                try:
+                    user = db.users.find_one({
+                        "username": username,
+                        "password": hash_password(password)
+                    })
+                    if user:
+                        st.session_state.user_id = str(user["_id"])
+                        st.success("Giriş başarılı!")
+                        st.rerun()
+                    else:
+                        st.error("Kullanıcı adı veya şifre yanlış!")
+                except Exception as e:
+                    st.error(f"Giriş sırasında bir hata oluştu: {e}")
     
     with tab2:
         st.subheader("Kayıt Ol")
@@ -132,25 +153,32 @@ def user_auth():
         
         if st.button("Kayıt Ol"):
             if new_username and new_password and full_name:
-                # Kullanıcı var mı kontrol et
-                if db.users.find_one({"username": new_username}):
-                    st.error("Bu kullanıcı adı zaten kullanılıyor!")
-                else:
-                    # Yeni kullanıcı oluştur
-                    user_data = {
-                        "username": new_username,
-                        "password": hash_password(new_password),
-                        "full_name": full_name,
-                        "age": age,
-                        "weight": weight,
-                        "height": height,
-                        "created_at": datetime.now(),
-                        "program_week": 1
-                    }
-                    result = db.users.insert_one(user_data)
-                    st.session_state.user_id = str(result.inserted_id)
-                    st.success("Kayıt başarılı! Hoş geldiniz!")
-                    st.rerun()
+                try:
+                    # Kullanıcı var mı kontrol et
+                    if db.users.find_one({"username": new_username}):
+                        st.error("Bu kullanıcı adı zaten kullanılıyor!")
+                    else:
+                        # Yeni kullanıcı oluştur
+                        user_data = {
+                            "username": new_username,
+                            "password": hash_password(new_password),
+                            "full_name": full_name,
+                            "age": int(age),
+                            "weight": float(weight),
+                            "height": int(height),
+                            "created_at": datetime.now(),
+                            "program_week": 1
+                        }
+                        
+                        # Veri tiplerini sanitize et
+                        user_data = sanitize_data(user_data)
+                        
+                        result = db.users.insert_one(user_data)
+                        st.session_state.user_id = str(result.inserted_id)
+                        st.success("Kayıt başarılı! Hoş geldiniz!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Kayıt sırasında bir hata oluştu: {e}")
             else:
                 st.error("Lütfen tüm alanları doldurun!")
     
@@ -159,6 +187,8 @@ def user_auth():
 # AI Koç
 def ai_coach_response(user_message, user_data=None):
     client = init_groq()
+    if not client:
+        return "Maalesef şu an AI koç servisine erişemiyorum. Lütfen daha sonra tekrar deneyin."
     
     system_prompt = f"""
     Sen Chym fitness uygulamasının AI koçusun. Adın Coach Alex. 
@@ -212,7 +242,16 @@ def main():
         st.error("Veritabanı bağlantısı kurulamadı!")
         return
     
-    user_data = db.users.find_one({"_id": ObjectId(user_id)})
+    try:
+        user_data = db.users.find_one({"_id": ObjectId(user_id)})
+        if not user_data:
+            st.error("Kullanıcı bulunamadı!")
+            st.session_state.user_id = None
+            st.rerun()
+            return
+    except Exception as e:
+        st.error(f"Kullanıcı bilgileri alınamadı: {e}")
+        return
     
     # Çıkış butonu
     if st.button("Çıkış Yap", key="logout"):
@@ -245,8 +284,13 @@ def main():
             st.metric("Yaş", f"{user_data.get('age', 0)}")
         
         with col4:
-            bmi = user_data.get('weight', 0) / ((user_data.get('height', 170) / 100) ** 2)
-            st.metric("BMI", f"{bmi:.1f}")
+            try:
+                height_m = user_data.get('height', 170) / 100
+                weight_kg = user_data.get('weight', 70)
+                bmi = weight_kg / (height_m ** 2)
+                st.metric("BMI", f"{bmi:.1f}")
+            except:
+                st.metric("BMI", "N/A")
         
         # Bugünün programı
         st.subheader("Bugünün Programı")
@@ -296,12 +340,15 @@ def main():
         new_week = st.selectbox("Program Haftası", range(1, 13), index=program_week-1, key="program_week_selector")
         
         if new_week != program_week:
-            db.users.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": {"program_week": new_week}}
-            )
-            st.success(f"Program haftası {new_week} olarak güncellendi!")
-            st.rerun()
+            try:
+                db.users.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": {"program_week": new_week}}
+                )
+                st.success(f"Program haftası {new_week} olarak güncellendi!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Program haftası güncellenirken hata: {e}")
         
         # Program detayları
         if new_week <= 2:
@@ -369,17 +416,24 @@ def main():
         notes = st.text_area("Notlar")
         
         if st.button("Antrenman Kaydet"):
-            workout_data = {
-                "user_id": user_id,
-                "type": workout_type,
-                "date": workout_date,
-                "duration": duration,
-                "intensity": intensity,
-                "notes": notes,
-                "created_at": datetime.now()
-            }
-            db.workouts.insert_one(workout_data)
-            st.success("Antrenman kaydedildi! 🎉")
+            try:
+                workout_data = {
+                    "user_id": user_id,
+                    "type": workout_type,
+                    "date": datetime.combine(workout_date, datetime.min.time()),
+                    "duration": int(duration),
+                    "intensity": int(intensity),
+                    "notes": notes,
+                    "created_at": datetime.now()
+                }
+                
+                # Veri tiplerini sanitize et
+                workout_data = sanitize_data(workout_data)
+                
+                db.workouts.insert_one(workout_data)
+                st.success("Antrenman kaydedildi! 🎉")
+            except Exception as e:
+                st.error(f"Antrenman kaydedilirken hata: {e}")
         
         # Ağırlık takibi
         st.subheader("Ağırlık Takibi")
@@ -391,61 +445,76 @@ def main():
             weight_date = st.date_input("Tarih", datetime.now(), key="weight_date")
         
         if st.button("Ağırlık Kaydet"):
-            weight_data = {
-                "user_id": user_id,
-                "weight": new_weight,
-                "date": weight_date,
-                "created_at": datetime.now()
-            }
-            db.weight_logs.insert_one(weight_data)
-            
-            # Kullanıcının mevcut kilosunu güncelle
-            db.users.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": {"weight": new_weight}}
-            )
-            
-            st.success("Ağırlık kaydedildi!")
+            try:
+                weight_data = {
+                    "user_id": user_id,
+                    "weight": float(new_weight),
+                    "date": datetime.combine(weight_date, datetime.min.time()),
+                    "created_at": datetime.now()
+                }
+                
+                # Veri tiplerini sanitize et
+                weight_data = sanitize_data(weight_data)
+                
+                db.weight_logs.insert_one(weight_data)
+                
+                # Kullanıcının mevcut kilosunu güncelle
+                db.users.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": {"weight": float(new_weight)}}
+                )
+                
+                st.success("Ağırlık kaydedildi!")
+            except Exception as e:
+                st.error(f"Ağırlık kaydedilirken hata: {e}")
         
         # Grafik görüntüleme
         st.subheader("İstatistikler")
         
-        # Ağırlık grafiği
-        weight_logs = list(db.weight_logs.find({"user_id": user_id}).sort("date", 1))
-        
-        if weight_logs:
-            df_weight = pd.DataFrame(weight_logs)
-            df_weight['date'] = pd.to_datetime(df_weight['date'])
+        try:
+            # Ağırlık grafiği
+            weight_logs = list(db.weight_logs.find({"user_id": user_id}).sort("date", 1))
             
-            fig = px.line(df_weight, x='date', y='weight', 
-                         title='Ağırlık Değişimi', 
-                         labels={'weight': 'Kilo (kg)', 'date': 'Tarih'})
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Antrenman istatistikleri
-        workouts = list(db.workouts.find({"user_id": user_id}).sort("date", -1).limit(30))
-        
-        if workouts:
-            df_workouts = pd.DataFrame(workouts)
-            df_workouts['date'] = pd.to_datetime(df_workouts['date'])
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Haftalık antrenman sayısı
-                workout_counts = df_workouts.groupby(df_workouts['date'].dt.isocalendar().week).size()
-                fig = px.bar(x=workout_counts.index, y=workout_counts.values,
-                           title='Haftalık Antrenman Sayısı',
-                           labels={'x': 'Hafta', 'y': 'Antrenman Sayısı'})
+            if weight_logs:
+                df_weight = pd.DataFrame(weight_logs)
+                df_weight['date'] = pd.to_datetime(df_weight['date'])
+                
+                fig = px.line(df_weight, x='date', y='weight', 
+                             title='Ağırlık Değişimi', 
+                             labels={'weight': 'Kilo (kg)', 'date': 'Tarih'})
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Henüz ağırlık kaydı yok.")
             
-            with col2:
-                # Ortalama yoğunluk
-                avg_intensity = df_workouts.groupby('date')['intensity'].mean()
-                fig = px.line(x=avg_intensity.index, y=avg_intensity.values,
-                            title='Ortalama Antrenman Yoğunluğu',
-                            labels={'x': 'Tarih', 'y': 'Yoğunluk'})
-                st.plotly_chart(fig, use_container_width=True)
+            # Antrenman istatistikleri
+            workouts = list(db.workouts.find({"user_id": user_id}).sort("date", -1).limit(30))
+            
+            if workouts:
+                df_workouts = pd.DataFrame(workouts)
+                df_workouts['date'] = pd.to_datetime(df_workouts['date'])
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Haftalık antrenman sayısı
+                    workout_counts = df_workouts.groupby(df_workouts['date'].dt.isocalendar().week).size()
+                    fig = px.bar(x=workout_counts.index, y=workout_counts.values,
+                               title='Haftalık Antrenman Sayısı',
+                               labels={'x': 'Hafta', 'y': 'Antrenman Sayısı'})
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Ortalama yoğunluk
+                    avg_intensity = df_workouts.groupby('date')['intensity'].mean()
+                    fig = px.line(x=avg_intensity.index, y=avg_intensity.values,
+                                title='Ortalama Antrenman Yoğunluğu',
+                                labels={'x': 'Tarih', 'y': 'Yoğunluk'})
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Henüz antrenman kaydı yok.")
+        
+        except Exception as e:
+            st.error(f"İstatistikler yüklenirken hata: {e}")
     
     with tab4:
         st.header("AI Koçun - Coach Alex")
@@ -497,15 +566,17 @@ def main():
             "Bu hafta nasıl gidiyor?"
         ]
         
-        for question in quick_questions:
-            if st.button(question, key=f"quick_{question}"):
-                st.session_state.chat_history.append(("user", question))
-                
-                with st.spinner("Coach Alex düşünüyor..."):
-                    ai_response = ai_coach_response(question, user_data)
-                    st.session_state.chat_history.append(("assistant", ai_response))
-                
-                st.rerun()
+        cols = st.columns(len(quick_questions))
+        for i, question in enumerate(quick_questions):
+            with cols[i]:
+                if st.button(question, key=f"quick_{i}"):
+                    st.session_state.chat_history.append(("user", question))
+                    
+                    with st.spinner("Coach Alex düşünüyor..."):
+                        ai_response = ai_coach_response(question, user_data)
+                        st.session_state.chat_history.append(("assistant", ai_response))
+                    
+                    st.rerun()
     
     with tab5:
         st.header("Ayarlar")
@@ -517,30 +588,36 @@ def main():
         
         with col1:
             new_name = st.text_input("Ad Soyad", value=user_data.get('full_name', ''))
-            new_age = st.number_input("Yaş", min_value=15, max_value=80, value=user_data.get('age', 25))
-            new_weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=user_data.get('weight', 70))
+            new_age = st.number_input("Yaş", min_value=15, max_value=80, value=int(user_data.get('age', 25)))
+            new_weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=int(user_data.get('weight', 70)))
         
         with col2:
-            new_height = st.number_input("Boy (cm)", min_value=140, max_value=220, value=user_data.get('height', 170))
-            new_program_week = st.selectbox("Program Haftası", range(1, 13), index=user_data.get('program_week', 1)-1, key="settings_program_week")
+            new_height = st.number_input("Boy (cm)", min_value=140, max_value=220, value=int(user_data.get('height', 170)))
+            new_program_week = st.selectbox("Program Haftası", range(1, 13), index=int(user_data.get('program_week', 1))-1, key="settings_program_week")
         
         if st.button("Profil Güncelle"):
-            update_data = {
-                "full_name": new_name,
-                "age": new_age,
-                "weight": new_weight,
-                "height": new_height,
-                "program_week": new_program_week,
-                "updated_at": datetime.now()
-            }
-            
-            db.users.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": update_data}
-            )
-            
-            st.success("Profil güncellendi!")
-            st.rerun()
+            try:
+                update_data = {
+                    "full_name": new_name,
+                    "age": int(new_age),
+                    "weight": float(new_weight),
+                    "height": int(new_height),
+                    "program_week": int(new_program_week),
+                    "updated_at": datetime.now()
+                }
+                
+                # Veri tiplerini sanitize et
+                update_data = sanitize_data(update_data)
+                
+                db.users.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": update_data}
+                )
+                
+                st.success("Profil güncellendi!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Profil güncellenirken hata: {e}")
         
         # Veri silme
         st.subheader("Veri Yönetimi")
@@ -549,13 +626,19 @@ def main():
         
         with col1:
             if st.button("Antrenman Verilerini Sil", type="secondary"):
-                db.workouts.delete_many({"user_id": user_id})
-                st.success("Antrenman verileri silindi!")
+                try:
+                    db.workouts.delete_many({"user_id": user_id})
+                    st.success("Antrenman verileri silindi!")
+                except Exception as e:
+                    st.error(f"Antrenman verileri silinirken hata: {e}")
         
         with col2:
             if st.button("Ağırlık Verilerini Sil", type="secondary"):
-                db.weight_logs.delete_many({"user_id": user_id})
-                st.success("Ağırlık verileri silindi!")
+                try:
+                    db.weight_logs.delete_many({"user_id": user_id})
+                    st.success("Ağırlık verileri silindi!")
+                except Exception as e:
+                    st.error(f"Ağırlık verileri silinirken hata: {e}")
         
         # Hesap silme
         st.subheader("Hesap Yönetimi")
