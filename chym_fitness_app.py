@@ -1,5 +1,7 @@
 import streamlit as st
 import pymongo
+from pymongo import MongoClient
+from bson import ObjectId
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.express as px
@@ -211,7 +213,7 @@ def main():
         st.error("Veritabanı bağlantısı kurulamadı!")
         return
     
-    user_data = db.users.find_one({"_id": pymongo.ObjectId(user_id)})
+    user_data = db.users.find_one({"_id": ObjectId(user_id)})
     
     # Çıkış butonu
     if st.button("Çıkış Yap", key="logout"):
@@ -296,7 +298,7 @@ def main():
         
         if new_week != program_week:
             db.users.update_one(
-                {"_id": pymongo.ObjectId(user_id)},
+                {"_id": ObjectId(user_id)},
                 {"$set": {"program_week": new_week}}
             )
             st.success(f"Program haftası {new_week} olarak güncellendi!")
@@ -400,7 +402,7 @@ def main():
             
             # Kullanıcının mevcut kilosunu güncelle
             db.users.update_one(
-                {"_id": pymongo.ObjectId(user_id)},
+                {"_id": ObjectId(user_id)},
                 {"$set": {"weight": new_weight}}
             )
             
@@ -534,7 +536,7 @@ def main():
             }
             
             db.users.update_one(
-                {"_id": pymongo.ObjectId(user_id)},
+                {"_id": ObjectId(user_id)},
                 {"$set": update_data}
             )
             
@@ -561,7 +563,7 @@ def main():
         
         if st.button("Hesabı Sil", type="secondary"):
             # Tüm kullanıcı verilerini sil
-            db.users.delete_one({"_id": pymongo.ObjectId(user_id)})
+            db.users.delete_one({"_id": ObjectId(user_id)})
             db.workouts.delete_many({"user_id": user_id})
             db.weight_logs.delete_many({"user_id": user_id})
             
