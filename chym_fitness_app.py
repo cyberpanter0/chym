@@ -10,6 +10,120 @@ import json
 import time
 from bson import ObjectId
 
+# Page config - daha modern görünüm
+st.set_page_config(
+    page_title="Chym - AI Fitness Koçu",
+    page_icon="💪",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Modern CSS stilleri
+st.markdown("""
+<style>
+    /* Ana tema renkleri */
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem 0;
+        border-radius: 15px;
+        text-align: center;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    
+    .metric-card {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        text-align: center;
+        color: white;
+        margin: 0.5rem 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .workout-card {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+        color: white;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .nutrition-card {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+        color: white;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .chat-message {
+        background: rgba(255,255,255,0.9);
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .user-message {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        margin-left: 2rem;
+    }
+    
+    .ai-message {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        margin-right: 2rem;
+    }
+    
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.5rem 1rem;
+        font-weight: bold;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    
+    .sidebar .sidebar-content {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .exercise-item {
+        background: rgba(255,255,255,0.1);
+        padding: 0.8rem;
+        margin: 0.5rem 0;
+        border-radius: 8px;
+        border-left: 4px solid #fff;
+    }
+    
+    .progress-bar {
+        background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+        height: 20px;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+    }
+    
+    .stats-container {
+        background: rgba(255,255,255,0.05);
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Sabit değerler
 GROQ_API_KEY = "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"
 MONGODB_URI = "mongodb+srv://emo36kars:fitness123@cluster0.zttnhmt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -22,7 +136,7 @@ def init_mongodb():
         db = client.chym_fitness
         return db
     except Exception as e:
-        st.error(f"MongoDB bağlantı hatası: {e}")
+        st.error(f"🔴 MongoDB bağlantı hatası: {e}")
         return None
 
 # Groq AI istemcisi
@@ -31,7 +145,7 @@ def init_groq():
     try:
         return Groq(api_key=GROQ_API_KEY)
     except Exception as e:
-        st.error(f"Groq AI bağlantı hatası: {e}")
+        st.error(f"🔴 Groq AI bağlantı hatası: {e}")
         return None
 
 # Şifre hashleme
@@ -88,16 +202,16 @@ PERSONAL_PROGRAM = {
         ]
     },
     "beslenme": {
-        "05:30": "500ml su",
-        "06:00": "1 muz + kahve",
-        "07:15": "Protein shake + bal",
-        "08:00": "Kahvaltı",
-        "11:00": "Ara öğün",
-        "13:30": "Öğle yemeği",
-        "16:00": "Pre-workout atıştırmalık",
-        "18:45": "Süt + muz",
-        "20:00": "Akşam yemeği",
-        "22:00": "Casein + kuruyemiş"
+        "05:30": "500ml su 💧",
+        "06:00": "1 muz + kahve ☕",
+        "07:15": "Protein shake + bal 🥤",
+        "08:00": "Kahvaltı 🍳",
+        "11:00": "Ara öğün 🍎",
+        "13:30": "Öğle yemeği 🍽️",
+        "16:00": "Pre-workout atıştırmalık 🥜",
+        "18:45": "Süt + muz 🥛",
+        "20:00": "Akşam yemeği 🍖",
+        "22:00": "Casein + kuruyemiş 🌰"
     },
     "makrolar": {
         "protein": "150-170g",
@@ -119,68 +233,89 @@ def user_auth():
     if st.session_state.user_id:
         return True, st.session_state.user_id
     
-    tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
+    # Modern giriş ekranı
+    st.markdown("""
+    <div class="main-header">
+        <h1>💪 Chym - AI Fitness Koçu</h1>
+        <p>Kişiselleştirilmiş fitness programın ve AI koçun burada!</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    with tab1:
-        st.subheader("Giriş Yap")
-        username = st.text_input("Kullanıcı Adı", key="login_username")
-        password = st.text_input("Şifre", type="password", key="login_password")
-        
-        if st.button("Giriş Yap"):
-            if username and password:
-                try:
-                    user = db.users.find_one({
-                        "username": username,
-                        "password": hash_password(password)
-                    })
-                    if user:
-                        st.session_state.user_id = str(user["_id"])
-                        st.success("Giriş başarılı!")
-                        st.rerun()
-                    else:
-                        st.error("Kullanıcı adı veya şifre yanlış!")
-                except Exception as e:
-                    st.error(f"Giriş sırasında bir hata oluştu: {e}")
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    with tab2:
-        st.subheader("Kayıt Ol")
-        new_username = st.text_input("Kullanıcı Adı", key="register_username")
-        new_password = st.text_input("Şifre", type="password", key="register_password")
-        full_name = st.text_input("Ad Soyad")
-        age = st.number_input("Yaş", min_value=15, max_value=80, value=25)
-        weight = st.number_input("Kilo (kg)", min_value=40, max_value=200, value=70)
-        height = st.number_input("Boy (cm)", min_value=140, max_value=220, value=170)
+    with col2:
+        tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
         
-        if st.button("Kayıt Ol"):
-            if new_username and new_password and full_name:
-                try:
-                    # Kullanıcı var mı kontrol et
-                    if db.users.find_one({"username": new_username}):
-                        st.error("Bu kullanıcı adı zaten kullanılıyor!")
+        with tab1:
+            with st.container():
+                st.markdown("### 👋 Tekrar Hoş Geldin!")
+                username = st.text_input("👤 Kullanıcı Adı", key="login_username")
+                password = st.text_input("🔒 Şifre", type="password", key="login_password")
+                
+                if st.button("🚀 Giriş Yap", use_container_width=True):
+                    if username and password:
+                        try:
+                            user = db.users.find_one({
+                                "username": username,
+                                "password": hash_password(password)
+                            })
+                            if user:
+                                st.session_state.user_id = str(user["_id"])
+                                st.success("🎉 Giriş başarılı!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Kullanıcı adı veya şifre yanlış!")
+                        except Exception as e:
+                            st.error(f"🔴 Giriş sırasında bir hata oluştu: {e}")
                     else:
-                        # Yeni kullanıcı oluştur
-                        user_data = {
-                            "username": new_username,
-                            "password": hash_password(new_password),
-                            "full_name": full_name,
-                            "age": int(age),
-                            "weight": float(weight),
-                            "height": int(height),
-                            "created_at": datetime.now(),
-                            "program_week": 1
-                        }
-                        
-                        # Veri tiplerini sanitize et
-                        user_data = sanitize_data(user_data)
-                        
-                        result = db.users.insert_one(user_data)
-                        st.session_state.user_id = str(result.inserted_id)
-                        st.success("Kayıt başarılı! Hoş geldiniz!")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Kayıt sırasında bir hata oluştu: {e}")
-            else:
-                st.error("Lütfen tüm alanları doldurun!")
+                        st.warning("⚠️ Lütfen tüm alanları doldurun!")
+        
+        with tab2:
+            with st.container():
+                st.markdown("### 🆕 Aramıza Katıl!")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    new_username = st.text_input("👤 Kullanıcı Adı", key="register_username")
+                    new_password = st.text_input("🔒 Şifre", type="password", key="register_password")
+                    full_name = st.text_input("🏷️ Ad Soyad")
+                
+                with col2:
+                    age = st.number_input("🎂 Yaş", min_value=15, max_value=80, value=25)
+                    weight = st.number_input("⚖️ Kilo (kg)", min_value=40, max_value=200, value=70)
+                    height = st.number_input("📏 Boy (cm)", min_value=140, max_value=220, value=170)
+                
+                if st.button("✨ Kayıt Ol", use_container_width=True):
+                    if new_username and new_password and full_name:
+                        try:
+                            # Kullanıcı var mı kontrol et
+                            if db.users.find_one({"username": new_username}):
+                                st.error("❌ Bu kullanıcı adı zaten kullanılıyor!")
+                            else:
+                                # Yeni kullanıcı oluştur
+                                user_data = {
+                                    "username": new_username,
+                                    "password": hash_password(new_password),
+                                    "full_name": full_name,
+                                    "age": int(age),
+                                    "weight": float(weight),
+                                    "height": int(height),
+                                    "created_at": datetime.now(),
+                                    "program_week": 1
+                                }
+                                
+                                # Veri tiplerini sanitize et
+                                user_data = sanitize_data(user_data)
+                                
+                                result = db.users.insert_one(user_data)
+                                st.session_state.user_id = str(result.inserted_id)
+                                st.success("🎉 Kayıt başarılı! Hoş geldiniz!")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"🔴 Kayıt sırasında bir hata oluştu: {e}")
+                    else:
+                        st.warning("⚠️ Lütfen tüm alanları doldurun!")
     
     return False, None
 
@@ -188,7 +323,7 @@ def user_auth():
 def ai_coach_response(user_message, user_data=None):
     client = init_groq()
     if not client:
-        return "Maalesef şu an AI koç servisine erişemiyorum. Lütfen daha sonra tekrar deneyin."
+        return "😔 Maalesef şu an AI koç servisine erişemiyorum. Lütfen daha sonra tekrar deneyin."
     
     system_prompt = f"""
     Sen Chym fitness uygulamasının AI koçusun. Adın Coach Alex. 
@@ -216,49 +351,125 @@ def ai_coach_response(user_message, user_data=None):
         )
         return chat_completion.choices[0].message.content
     except Exception as e:
-        return f"Ups! Şu an biraz yorgunum 😅 Tekrar dener misin? Hata: {str(e)}"
+        return f"😅 Ups! Şu an biraz yorgunum. Tekrar dener misin? Hata: {str(e)}"
+
+# Dashboard widget'ları
+def render_metric_card(title, value, icon, color="primary"):
+    st.markdown(f"""
+    <div class="metric-card">
+        <h3>{icon} {title}</h3>
+        <h2>{value}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_workout_card(title, exercises, time_info=""):
+    st.markdown(f"""
+    <div class="workout-card">
+        <h3>🏋️ {title} {time_info}</h3>
+        <div class="stats-container">
+    """, unsafe_allow_html=True)
+    
+    for exercise, sets in exercises.items():
+        st.markdown(f"""
+        <div class="exercise-item">
+            <strong>{exercise}:</strong> {sets}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+def render_nutrition_card():
+    st.markdown("""
+    <div class="nutrition-card">
+        <h3>🍎 Beslenme Takibi</h3>
+        <div class="stats-container">
+    """, unsafe_allow_html=True)
+    
+    current_time = datetime.now().strftime("%H:%M")
+    
+    for meal_time, meal in PERSONAL_PROGRAM["beslenme"].items():
+        status = "✅" if current_time > meal_time else "⏰"
+        st.markdown(f"""
+        <div class="exercise-item">
+            {status} <strong>{meal_time}:</strong> {meal}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 # Ana uygulama
 def main():
-    st.set_page_config(
-        page_title="Chym - AI Fitness Koçu",
-        page_icon="💪",
-        layout="wide"
-    )
-    
-    st.title("💪 Chym - AI Fitness Koçu")
-    st.markdown("*Kişiselleştirilmiş fitness programın ve AI koçun burada!*")
-    
     # Kullanıcı giriş kontrolü
     is_logged_in, user_id = user_auth()
     
     if not is_logged_in:
-        st.info("Lütfen giriş yapın veya kayıt olun.")
+        st.info("👆 Lütfen giriş yapın veya kayıt olun.")
         return
     
     # MongoDB ve kullanıcı bilgilerini al
     db = init_mongodb()
     if not db:
-        st.error("Veritabanı bağlantısı kurulamadı!")
+        st.error("🔴 Veritabanı bağlantısı kurulamadı!")
         return
     
     try:
         user_data = db.users.find_one({"_id": ObjectId(user_id)})
         if not user_data:
-            st.error("Kullanıcı bulunamadı!")
+            st.error("❌ Kullanıcı bulunamadı!")
             st.session_state.user_id = None
             st.rerun()
             return
     except Exception as e:
-        st.error(f"Kullanıcı bilgileri alınamadı: {e}")
+        st.error(f"🔴 Kullanıcı bilgileri alınamadı: {e}")
         return
     
-    # Çıkış butonu
-    if st.button("Çıkış Yap", key="logout"):
-        st.session_state.user_id = None
-        st.rerun()
+    # Sidebar - Kullanıcı profili
+    with st.sidebar:
+        st.markdown(f"""
+        <div class="main-header">
+            <h2>👋 Hoş geldin!</h2>
+            <h3>{user_data['full_name']}</h3>
+            <p>Hafta {user_data.get('program_week', 1)}/12</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Hızlı istatistikler
+        st.markdown("### 📊 Hızlı Bakış")
+        
+        try:
+            height_m = user_data.get('height', 170) / 100
+            weight_kg = user_data.get('weight', 70)
+            bmi = weight_kg / (height_m ** 2)
+            
+            if bmi < 18.5:
+                bmi_status = "Zayıf"
+            elif bmi < 25:
+                bmi_status = "Normal"
+            elif bmi < 30:
+                bmi_status = "Kilolu"
+            else:
+                bmi_status = "Obez"
+            
+            st.metric("BMI", f"{bmi:.1f}", f"{bmi_status}")
+        except:
+            st.metric("BMI", "N/A")
+        
+        st.metric("Yaş", f"{user_data.get('age', 0)}")
+        st.metric("Kilo", f"{user_data.get('weight', 0)} kg")
+        st.metric("Boy", f"{user_data.get('height', 0)} cm")
+        
+        # Çıkış butonu
+        if st.button("🚪 Çıkış Yap", use_container_width=True):
+            st.session_state.user_id = None
+            st.rerun()
     
-    st.markdown(f"**Hoş geldin, {user_data['full_name']}!** 🎉")
+    # Ana içerik
+    st.markdown(f"""
+    <div class="main-header">
+        <h1>💪 Chym Fitness Dashboard</h1>
+        <p>Bugün de harika bir antrenman günü!</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Ana menü
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -270,55 +481,179 @@ def main():
     ])
     
     with tab1:
-        st.header("Dashboard")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Program Haftası", f"{user_data.get('program_week', 1)}/12")
-        
-        with col2:
-            st.metric("Kilo", f"{user_data.get('weight', 0)} kg")
-        
-        with col3:
-            st.metric("Yaş", f"{user_data.get('age', 0)}")
-        
-        with col4:
-            try:
-                height_m = user_data.get('height', 170) / 100
-                weight_kg = user_data.get('weight', 70)
-                bmi = weight_kg / (height_m ** 2)
-                st.metric("BMI", f"{bmi:.1f}")
-            except:
-                st.metric("BMI", "N/A")
-        
         # Bugünün programı
-        st.subheader("Bugünün Programı")
         program_week = user_data.get('program_week', 1)
         
-        if program_week <= 2:
-            st.success("**Hafta 1-2 Programı**")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if program_week <= 2:
+                render_workout_card("Sabah Antrenmanı", PERSONAL_PROGRAM["hafta_1_2"]["sabah"], "(06:00)")
+            else:
+                st.markdown("""
+                <div class="workout-card">
+                    <h3>🏋️ Sabah Antrenmanı (06:00)</h3>
+                    <div class="stats-container">
+                        <div class="exercise-item">
+                            <strong>Güç Odaklı:</strong> Her hareket 6 set, 6-12 tekrar, 90sn dinlenme
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col2:
+            if program_week <= 2:
+                render_workout_card("Akşam Antrenmanı", PERSONAL_PROGRAM["hafta_1_2"]["aksam"], "(18:00)")
+            else:
+                st.markdown("""
+                <div class="workout-card">
+                    <h3>🏋️ Akşam Antrenmanı (18:00)</h3>
+                    <div class="stats-container">
+                        <div class="exercise-item">
+                            <strong>Dayanıklılık + Metabolik:</strong> Süpersetler, 15-25 tekrar
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Beslenme takibi
+        render_nutrition_card()
+        
+        # Günlük motivasyon
+        st.markdown("""
+        <div class="workout-card">
+            <h3>🔥 Günlük Motivasyon</h3>
+            <div class="stats-container">
+                <div class="exercise-item">
+                    <strong>Bugünün sözü:</strong> "Başarı, sürekli çaba göstermenin sonucudur. Sen yapabilirsin! 💪"
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown("### 📋 Kişisel Programım")
+        
+        program_week = user_data.get('program_week', 1)
+        
+        # Hafta seçici
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_week = st.selectbox(
+                "Program Haftası", 
+                range(1, 13), 
+                index=program_week-1, 
+                key="program_week_selector"
+            )
+        
+        with col2:
+            if new_week != program_week:
+                if st.button("🔄 Güncelle"):
+                    try:
+                        db.users.update_one(
+                            {"_id": ObjectId(user_id)},
+                            {"$set": {"program_week": new_week}}
+                        )
+                        st.success("✅ Program haftası güncellendi!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"🔴 Program haftası güncellenirken hata: {e}")
+        
+        # Program progress bar
+        progress = (new_week - 1) / 12
+        st.markdown(f"""
+        <div class="progress-bar" style="width: {progress*100}%"></div>
+        <p style="text-align: center; margin-top: 0.5rem;">
+            <strong>Program İlerleme:</strong> {new_week}/12 hafta (%{progress*100:.0f})
+        </p>
+        """, unsafe_allow_html=True)
+        
+        # Program detayları
+        if new_week <= 2:
+            st.markdown("#### 🎯 Hafta 1-2: Temel Hareket Kalıpları")
+            
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("**Sabah Antrenmanı (06:00)**")
-                for exercise, sets in PERSONAL_PROGRAM["hafta_1_2"]["sabah"].items():
-                    st.write(f"• {exercise}: {sets}")
+                render_workout_card("Sabah Antrenmanı", PERSONAL_PROGRAM["hafta_1_2"]["sabah"], "(06:00)")
             
             with col2:
-                st.markdown("**Akşam Antrenmanı (18:00)**")
-                for exercise, sets in PERSONAL_PROGRAM["hafta_1_2"]["aksam"].items():
-                    st.write(f"• {exercise}: {sets}")
+                render_workout_card("Akşam Antrenmanı", PERSONAL_PROGRAM["hafta_1_2"]["aksam"], "(18:00)")
         
-        elif program_week <= 6:
-            st.success("**Hafta 3-6 Programı**")
-            st.write("**Sabah:** " + PERSONAL_PROGRAM["hafta_3_6"]["sabah"])
-            st.write("**Akşam:** " + PERSONAL_PROGRAM["hafta_3_6"]["aksam"])
+        elif new_week <= 6:
+            st.markdown("#### 🚀 Hafta 3-6: Yoğunluk Artışı")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("""
+                <div class="workout-card">
+                    <h3>🏋️ Sabah (Güç Odaklı)</h3>
+                    <div class="stats-container">
+                        <div class="exercise-item">
+                            <strong>Format:</strong> Her hareket 6 set, 6-12 tekrar, 90sn dinlenme
+                        </div>
+                        <div class="exercise-item">
+                            <strong>Teknik:</strong> Negatif faz 3-5sn
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("""
+                <div class="workout-card">
+                    <h3>🏋️ Akşam (Dayanıklılık + Metabolik)</h3>
+                    <div class="stats-container">
+                        <div class="exercise-item">
+                            <strong>Format:</strong> Süpersetler, 15-25 tekrar
+                        </div>
+                        <div class="exercise-item">
+                            <strong>Dinlenme:</strong> Set arası 30sn, süperset arası 60sn
+                        </div>
+                        <div class="exercise-item">
+                            <strong>Tempo:</strong> Patlayıcı yukarı, kontrollü aşağı
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
         
         else:
-            st.success("**Hafta 7-12 - İleri Seviye Programı**")
-            for exercise in PERSONAL_PROGRAM["hafta_7_12"]["ileri_seviye"]:
-                st.write(f"• {exercise}")
+            st.markdown("#### 🏆 Hafta 7-12: İleri Seviye Hareketler")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("""
+                <div class="workout-card">
+                    <h3>🏋️ İleri Seviye Hareketler</h3>
+                    <div class="stats-container">
+                """, unsafe_allow_html=True)
+                
+                for i, exercise in enumerate(PERSONAL_PROGRAM["hafta_7_12"]["ileri_seviye"][:4]):
+                    st.markdown(f"""
+                    <div class="exercise-item">
+                        <strong>{i+1}.</strong> {exercise}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("</div></div>", unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("""
+                <div class="workout-card">
+                    <h3>🏋️ İleri Seviye Hareketler</h3>
+                    <div class="stats-container">
+                """, unsafe_allow_html=True)
+                
+                for i, exercise in enumerate(PERSONAL_PROGRAM["hafta_7_12"]["ileri_seviye"][4:]):
+                    st.markdown(f"""
+                    <div class="exercise-item">
+                        <strong>{i+5}.</strong> {exercise}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("</div></div>", unsafe_allow_html=True)
         
         # Beslenme hatırlatıcısı
         st.subheader("Beslenme Hatırlatıcısı")
