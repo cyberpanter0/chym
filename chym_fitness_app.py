@@ -1,7 +1,5 @@
 import streamlit as st
 import pymongo
-from pymongo import MongoClient
-from bson import ObjectId
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.express as px
@@ -10,6 +8,7 @@ from groq import Groq
 import hashlib
 import json
 import time
+from bson import ObjectId
 
 # Sabit değerler
 GROQ_API_KEY = "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"
@@ -294,7 +293,7 @@ def main():
         program_week = user_data.get('program_week', 1)
         
         # Hafta seçici
-        new_week = st.selectbox("Program Haftası", range(1, 13), index=program_week-1)
+        new_week = st.selectbox("Program Haftası", range(1, 13), index=program_week-1, key="program_week_selector")
         
         if new_week != program_week:
             db.users.update_one(
@@ -523,7 +522,7 @@ def main():
         
         with col2:
             new_height = st.number_input("Boy (cm)", min_value=140, max_value=220, value=user_data.get('height', 170))
-            new_program_week = st.selectbox("Program Haftası", range(1, 13), index=user_data.get('program_week', 1)-1)
+            new_program_week = st.selectbox("Program Haftası", range(1, 13), index=user_data.get('program_week', 1)-1, key="settings_program_week")
         
         if st.button("Profil Güncelle"):
             update_data = {
