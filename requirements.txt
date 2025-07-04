@@ -10,6 +10,6 @@ flask-cors
 gdown
 fire
 fake-useragent
-pymongo==4.6.0
+pymongo==3.12.3
 certifi==2023.11.17
 dnspython==2.4.2
