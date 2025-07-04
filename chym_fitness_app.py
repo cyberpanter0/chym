@@ -11,7 +11,7 @@ import time
 
 # Sabit değerler
 GROQ_API_KEY = "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"
-MONGODB_URI = "mongodb+srv://emo36kars:wRhNGbc6LPX26.c@cluster0.zttnhmt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+MONGODB_URI = "mongodb+srv://emo36kars:fitness123@cluster0.zttnhmt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 # MongoDB bağlantısı
 @st.cache_resource
