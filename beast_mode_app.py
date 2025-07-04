@@ -623,6 +623,18 @@ def login_page():
                     else:
                         st.error("❌ Lütfen tüm alanları doldurun!")
 
+# Fallback Response
+def get_fallback_response(message_type):
+    """API hatası durumunda fallback yanıt"""
+    fallback_responses = {
+        'exercise': "💪 Harika bir antrenman! Devam et, seni gururla izliyorum!",
+        'nutrition': "🍎 Beslenme konusunda harika gidiyorsun! Sağlıklı seçimler yapıyorsun.",
+        'motivation': "🦁 Sen bir BEAST'sin! Her adım seni hedefine yaklaştırıyor!",
+        'progress': "📈 İlerleme süreci harika! Sabırlı ol, sonuçlar gelecek!",
+        'general': "🤖 Şu an yanıt veremiyorum ama seni desteklemeye devam ediyorum!"
+    }
+    return fallback_responses.get(message_type, fallback_responses['general'])
+
 # Ana Uygulama
 def main_app():
     user = st.session_state.current_user
@@ -646,13 +658,16 @@ def main_app():
     
     with col3:
         if st.button("🚪 Çıkış", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.current_user = None
+            # Session'u temizle
+            for key in list(st.session_state.keys()):
+                if key not in ['db']:  # DB bağlantısını koru
+                    del st.session_state[key]
+            init_session_state()
             st.rerun()
     
     st.divider()
     
-    # Tabs - Yeni düzenleme
+    # Tabs
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Panel", "🤖 Koç", "💪 Program", "🍎 Beslenme", "💊 Takviyeler", "📈 İlerleme"
     ])
@@ -675,7 +690,214 @@ def main_app():
     with tab6:
         progress_tab()
 
-# Program Tab - Yeni
+# Dashboard Tab - Optimize edilmiş
+def dashboard_tab():
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # Güvenli metrikler
+    total_workouts = len(st.session_state.exercise_log) if st.session_state.exercise_log else 0
+    
+    with col1:
+        st.metric("Beast Mode", f"{st.session_state.beast_mode_score}%", "🔥")
+    
+    with col2:
+        st.metric("Toplam Antrenman", total_workouts, "💪")
+    
+    with col3:
+        try:
+            user_created = st.session_state.current_user.get('created_at', datetime.now())
+            if isinstance(user_created, str):
+                user_created = datetime.now()
+            weeks_passed = max(1, (datetime.now() - user_created).days // 7)
+            st.metric("Program Haftası", f"{min(weeks_passed, 24)}/24", "📅")
+        except:
+            st.metric("Program Haftası", "1/24", "📅")
+    
+    with col4:
+        today_exercises = 0
+        if st.session_state.exercise_log:
+            today_exercises = len([ex for ex in st.session_state.exercise_log 
+                                  if ex.get('date', datetime.now()).date() == datetime.now().date()])
+        st.metric("Bugün Yapılan", today_exercises, "🎯")
+    
+    st.divider()
+    
+    # Haftalık ilerleme grafiği
+    st.subheader("📈 Haftalık İlerleme")
+    
+    # Güvenli veri oluşturma
+    try:
+        progress_data = []
+        for i in range(7):
+            date = datetime.now() - timedelta(days=6-i)
+            exercises_count = 0
+            if st.session_state.exercise_log:
+                exercises_count = len([ex for ex in st.session_state.exercise_log 
+                                      if ex.get('date', datetime.now()).date() == date.date()])
+            progress_data.append({
+                'Tarih': date.strftime('%d/%m'),
+                'Egzersiz': exercises_count,
+                'Beast Mode': min(100, max(0, st.session_state.beast_mode_score - (6-i) * 2))
+            })
+        
+        df = pd.DataFrame(progress_data)
+        
+        if not df.empty:
+            fig = px.line(df, x='Tarih', y=['Egzersiz', 'Beast Mode'], 
+                         title="Son 7 Günlük İlerleme")
+            fig.update_layout(height=400)
+            st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.warning("Grafik yüklenemedi. Veri biriktikçe görünecek.")
+    
+    # Son aktiviteler
+    st.subheader("🔥 Son Aktiviteler")
+    
+    if st.session_state.exercise_log:
+        recent_exercises = st.session_state.exercise_log[-5:]
+        for exercise in reversed(recent_exercises):
+            exercise_name = exercise.get('exercise', 'Bilinmeyen').replace('_', ' ').title()
+            exercise_date = exercise.get('date', datetime.now())
+            if isinstance(exercise_date, str):
+                exercise_date = datetime.now()
+            
+            st.markdown(f"""
+            <div class="exercise-card">
+                <strong>{exercise_name}</strong> - 
+                {exercise.get('sets', 0)} set × {exercise.get('reps', 0)} tekrar
+                <br><small>{exercise_date.strftime('%d/%m/%Y %H:%M')}</small>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("Henüz egzersiz kaydı yok. Koç ile konuşarak başla! 💪")
+
+# Coach Tab - Optimize edilmiş
+def coach_tab():
+    st.subheader("🤖 Beast Mode Koçun")
+    st.write("AI koçun ile konuş, antrenman kaydet ve motivasyon al!")
+    
+    # Chat container
+    chat_container = st.container()
+    
+    with chat_container:
+        # Chat geçmişini güvenli şekilde göster
+        if st.session_state.chat_history:
+            for chat in st.session_state.chat_history[-10:]:  # Son 10 mesaj
+                user_msg = chat.get('message', '')
+                ai_msg = chat.get('response', '')
+                
+                st.markdown(f"""
+                <div class="chat-message user-message">
+                    <strong>Sen:</strong> {user_msg}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown(f"""
+                <div class="chat-message ai-message">
+                    <strong>🦁 Koç:</strong> {ai_msg}
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Mesaj input
+    with st.form("chat_form", clear_on_submit=True):
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            user_message = st.text_input("Koçuna bir şeyler söyle...", 
+                                       placeholder="Örn: 20 push-up 3 set yaptım!")
+        
+        with col2:
+            send_button = st.form_submit_button("📨 Gönder", use_container_width=True)
+        
+        if send_button and user_message:
+            try:
+                # Mesajı analiz et
+                analysis = analyze_message(user_message)
+                
+                # AI yanıtı al
+                ai_response = call_groq_api(
+                    user_message, 
+                    analysis['type'], 
+                    st.session_state.current_user,
+                    st.session_state.chat_history
+                )
+                
+                # Chat geçmişine ekle
+                chat_entry = {
+                    'message': user_message,
+                    'response': ai_response,
+                    'timestamp': datetime.now(),
+                    'type': analysis['type']
+                }
+                
+                st.session_state.chat_history.append(chat_entry)
+                
+                # Egzersiz verisini kaydet
+                if analysis.get('exercise_data'):
+                    exercise_data = analysis['exercise_data']
+                    exercise_data['date'] = datetime.now()
+                    st.session_state.exercise_log.append(exercise_data)
+                    
+                    # Beast Mode skoru güncelle
+                    st.session_state.beast_mode_score = min(100, 
+                        st.session_state.beast_mode_score + 2)
+                
+                # MongoDB'ye kaydet
+                try:
+                    if st.session_state.db and st.session_state.current_user:
+                        save_chat_to_db(
+                            st.session_state.current_user['_id'], 
+                            user_message, 
+                            ai_response, 
+                            analysis['type']
+                        )
+                except Exception as db_error:
+                    pass  # DB hatası sessiz geçsin
+                
+                st.rerun()
+            except Exception as e:
+                st.error(f"Mesaj gönderme hatası: {str(e)}")
+    
+    # Hızlı eylemler
+    st.subheader("⚡ Hızlı Eylemler")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("💪 Bugünün Programını Tamamladım", use_container_width=True):
+            response = "🔥 Harika iş çıkardın! Beast Mode'un yükseliyor. Dinlenme ve beslenmeyi ihmal etme. Yarın daha güçlü olacaksın! 💪"
+            st.session_state.chat_history.append({
+                'message': "Bugünün programını tamamladım!",
+                'response': response,
+                'timestamp': datetime.now(),
+                'type': 'achievement'
+            })
+            st.session_state.beast_mode_score = min(100, st.session_state.beast_mode_score + 5)
+            st.rerun()
+    
+    with col2:
+        if st.button("😴 Yorgun Hissediyorum", use_container_width=True):
+            response = "💤 Dinlenme de antrenmanın bir parçası! Bugün hafif yapabilir veya dinlenebilirsin. Vücudunu dinle, zorlamaya gerek yok. Yarın daha fresh olacaksın! 🌟"
+            st.session_state.chat_history.append({
+                'message': "Çok yorgun hissediyorum",
+                'response': response,
+                'timestamp': datetime.now(),
+                'type': 'support'
+            })
+            st.rerun()
+    
+    with col3:
+        if st.button("🎯 Motivasyona İhtiyacım Var", use_container_width=True):
+            response = "🦁 Sen bir BEAST'sin! Her tekrar seni hedefine yaklaştırıyor. 6 ay sonraki haline bir düşün - o güçlü, kendinden emin versiyonun seni bekliyor! Şimdi kalk ve bir hareket yap! 🔥💪"
+            st.session_state.chat_history.append({
+                'message': "Motivasyona ihtiyacım var",
+                'response': response,
+                'timestamp': datetime.now(),
+                'type': 'motivation'
+            })
+            st.rerun()
+
+# Program Tab - Optimize edilmiş
 def program_tab():
     st.subheader("💪 Beast Mode Programın")
     st.write("6 aylık dönüşüm programının detayları")
@@ -723,9 +945,10 @@ def program_tab():
     with col1:
         st.markdown("### 🌅 Sabah Antrenmanı (06:00)")
         for i, exercise in enumerate(DAILY_PROGRAM['hafta_1_2']['sabah'], 1):
+            exercise_name = exercise['exercise'].replace('_', ' ').replace('-', ' ').title()
             st.markdown(f"""
             <div class="exercise-card">
-                <strong>{i}. {exercise['exercise'].title()}</strong><br>
+                <strong>{i}. {exercise_name}</strong><br>
                 <span style="color: #FF6B35;">{exercise['sets']} set × {exercise['reps']} tekrar</span><br>
                 <small>{exercise['notes']}</small>
             </div>
@@ -734,9 +957,10 @@ def program_tab():
     with col2:
         st.markdown("### 🌆 Akşam Antrenmanı (18:00)")
         for i, exercise in enumerate(DAILY_PROGRAM['hafta_1_2']['aksam'], 1):
+            exercise_name = exercise['exercise'].replace('_', ' ').replace('-', ' ').title()
             st.markdown(f"""
             <div class="exercise-card">
-                <strong>{i}. {exercise['exercise'].title()}</strong><br>
+                <strong>{i}. {exercise_name}</strong><br>
                 <span style="color: #FF6B35;">{exercise['sets']} set × {exercise['reps']} tekrar</span><br>
                 <small>{exercise['notes']}</small>
             </div>
@@ -755,7 +979,7 @@ def program_tab():
     for technique, description in techniques.items():
         st.markdown(f"**{technique}:** {description}")
 
-# Beslenme Tab - Yeni
+# Beslenme Tab - Optimize edilmiş
 def nutrition_tab():
     st.subheader("🍎 Beast Mode Beslenme Planı")
     
@@ -808,7 +1032,7 @@ def nutrition_tab():
     st.markdown("**Oda Koşulları:**")
     st.markdown("• Sıcaklık: 16-18°C • Nem: %30-50 • Işık: Tam karanlık • Ses: Sessizlik")
 
-# Takviyeler Tab - Yeni
+# Takviyeler Tab - Optimize edilmiş
 def supplements_tab():
     st.subheader("💊 Beast Mode Takviyeleri")
     st.write("Performans ve iyileşmeyi destekleyen takviyeler")
@@ -833,200 +1057,24 @@ def supplements_tab():
     
     st.info("💡 Takviyeleri kullanmadan önce doktorunuza danışın. 18 yaş altı için kreatin önerilmez.")
 
-# Dashboard Tab - Güncellenmiş
-def dashboard_tab():
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Beast Mode", f"{st.session_state.beast_mode_score}%", "🔥")
-    
-    with col2:
-        st.metric("Toplam Antrenman", len(st.session_state.exercise_log), "💪")
-    
-    with col3:
-        weeks_passed = max(1, (datetime.now() - datetime(2024, 1, 1)).days // 7)
-        st.metric("Program Haftası", f"{min(weeks_passed, 24)}/24", "📅")
-    
-    with col4:
-        today_exercises = len([ex for ex in st.session_state.exercise_log 
-                              if ex.get('date', datetime.now()).date() == datetime.now().date()])
-        st.metric("Bugün Yapılan", today_exercises, "🎯")
-    
-    st.divider()
-    
-    # Haftalık ilerleme grafiği
-    st.subheader("📈 Haftalık İlerleme")
-    
-    # Örnek veri oluştur
-    progress_data = []
-    for i in range(7):
-        date = datetime.now() - timedelta(days=6-i)
-        exercises_count = len([ex for ex in st.session_state.exercise_log 
-                              if ex.get('date', datetime.now()).date() == date.date()])
-        progress_data.append({
-            'Tarih': date.strftime('%d/%m'),
-            'Egzersiz': exercises_count,
-            'Beast Mode': min(100, st.session_state.beast_mode_score + (i * 2))
-        })
-    
-    df = pd.DataFrame(progress_data)
-    
-    if not df.empty:
-        fig = px.line(df, x='Tarih', y=['Egzersiz', 'Beast Mode'], 
-                     title="Son 7 Günlük İlerleme")
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Son aktiviteler
-    st.subheader("🔥 Son Aktiviteler")
-    
-    if st.session_state.exercise_log:
-        recent_exercises = st.session_state.exercise_log[-5:]
-        for exercise in reversed(recent_exercises):
-            st.markdown(f"""
-            <div class="exercise-card">
-                <strong>{exercise.get('exercise', 'Bilinmeyen').title()}</strong> - 
-                {exercise.get('sets', 0)} set × {exercise.get('reps', 0)} tekrar
-                <br><small>{exercise.get('date', datetime.now()).strftime('%d/%m/%Y %H:%M')}</small>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("Henüz egzersiz kaydı yok. Koç ile konuşarak başla! 💪")
-
-# Coach Tab - Güncellenmiş
-def coach_tab():
-    st.subheader("🤖 Beast Mode Koçun")
-    st.write("AI koçun ile konuş, antrenman kaydet ve motivasyon al!")
-    
-    # Chat container
-    chat_container = st.container()
-    
-    with chat_container:
-        # Chat geçmişini göster
-        for chat in st.session_state.chat_history:
-            st.markdown(f"""
-            <div class="chat-message user-message">
-                <strong>Sen:</strong> {chat['message']}
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown(f"""
-            <div class="chat-message ai-message">
-                <strong>🦁 Koç:</strong> {chat['response']}
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Mesaj input
-    with st.form("chat_form", clear_on_submit=True):
-        col1, col2 = st.columns([4, 1])
-        
-        with col1:
-            user_message = st.text_input("Koçuna bir şeyler söyle...", 
-                                       placeholder="Örn: 20 push-up 3 set yaptım!")
-        
-        with col2:
-            send_button = st.form_submit_button("📨 Gönder", use_container_width=True)
-        
-        if send_button and user_message:
-            # Mesajı analiz et
-            analysis = analyze_message(user_message)
-            
-            # AI yanıtı al
-            ai_response = call_groq_api(
-                user_message, 
-                analysis['type'], 
-                st.session_state.current_user,
-                st.session_state.chat_history
-            )
-            
-            # Chat geçmişine ekle
-            chat_entry = {
-                'message': user_message,
-                'response': ai_response,
-                'timestamp': datetime.now(),
-                'type': analysis['type']
-            }
-            
-            st.session_state.chat_history.append(chat_entry)
-            
-            # Egzersiz verisini kaydet
-            if analysis['exercise_data']:
-                st.session_state.exercise_log.append({
-                    **analysis['exercise_data'],
-                    'date': datetime.now()
-                })
-                
-                # Beast Mode skoru güncelle
-                st.session_state.beast_mode_score = min(100, 
-                    st.session_state.beast_mode_score + 2)
-            
-            # MongoDB'ye kaydet
-            if st.session_state.db and st.session_state.current_user:
-                save_chat_to_db(st.session_state.current_user['_id'], chat_entry)
-            
-            st.rerun()
-    
-    # Hızlı eylemler
-    st.subheader("⚡ Hızlı Eylemler")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("💪 Bugünün Programını Tamamladım", use_container_width=True):
-            st.session_state.chat_history.append({
-                'message': "Bugünün programını tamamladım!",
-                'response': "🔥 Harika iş çıkardın! Beast Mode'un yükseliyor. Dinlenme ve beslenmeyi ihmal etme. Yarın daha güçlü olacaksın! 💪",
-                'timestamp': datetime.now(),
-                'type': 'achievement'
-            })
-            st.session_state.beast_mode_score = min(100, st.session_state.beast_mode_score + 5)
-            st.rerun()
-    
-    with col2:
-        if st.button("😴 Yorgun Hissediyorum", use_container_width=True):
-            st.session_state.chat_history.append({
-                'message': "Çok yorgun hissediyorum",
-                'response': "💤 Dinlenme de antrenmanın bir parçası! Bugün hafif yapabilir veya dinlenebilirsin. Vücudunu dinle, zorlamaya gerek yok. Yarın daha fresh olacaksın! 🌟",
-                'timestamp': datetime.now(),
-                'type': 'support'
-            })
-            st.rerun()
-    
-    with col3:
-        if st.button("🎯 Motivasyona İhtiyacım Var", use_container_width=True):
-            st.session_state.chat_history.append({
-                'message': "Motivasyona ihtiyacım var",
-                'response': "🦁 Sen bir BEAST'sin! Her tekrar seni hedefine yaklaştırıyor. 6 ay sonraki haline bir düşün - o güçlü, kendinden emin versiyonun seni bekliyor! Şimdi kalk ve bir hareket yap! 🔥💪",
-                'timestamp': datetime.now(),
-                'type': 'motivation'
-            })
-            st.rerun()
-
-# Progress Tab - Yeni
+# Progress Tab - Optimize edilmiş
 def progress_tab():
     st.subheader("📈 İlerleme Takibi")
+    
+    # Güvenli istatistikler
+    total_workouts = len(st.session_state.exercise_log) if st.session_state.exercise_log else 0
+    total_sets = sum(ex.get('sets', 0) for ex in st.session_state.exercise_log) if st.session_state.exercise_log else 0
+    total_reps = sum(ex.get('reps', 0) * ex.get('sets', 0) for ex in st.session_state.exercise_log) if st.session_state.exercise_log else 0
     
     # Genel istatistikler
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_workouts = len(st.session_state.exercise_log)
         st.metric("Toplam Antrenman", total_workouts, "💪")
-    
     with col2:
-        if st.session_state.exercise_log:
-            total_sets = sum(ex.get('sets', 0) for ex in st.session_state.exercise_log)
-            st.metric("Toplam Set", total_sets, "🔥")
-        else:
-            st.metric("Toplam Set", 0, "🔥")
-    
+        st.metric("Toplam Set", total_sets, "🔥")
     with col3:
-        if st.session_state.exercise_log:
-            total_reps = sum(ex.get('reps', 0) * ex.get('sets', 0) for ex in st.session_state.exercise_log)
-            st.metric("Toplam Tekrar", total_reps, "⚡")
-        else:
-            st.metric("Toplam Tekrar", 0, "⚡")
-    
+        st.metric("Toplam Tekrar", total_reps, "⚡")
     with col4:
         streak_days = 7  # Örnek değer
         st.metric("Seri (Gün)", streak_days, "🏆")
@@ -1037,82 +1085,89 @@ def progress_tab():
     if st.session_state.exercise_log:
         st.subheader("🎯 Kas Grupları Dağılımı")
         
-        muscle_groups = {}
-        for exercise in st.session_state.exercise_log:
-            muscle_group = exercise.get('muscle_group', 'other')
-            muscle_groups[muscle_group] = muscle_groups.get(muscle_group, 0) + 1
-        
-        # Türkçe çeviri
-        muscle_group_turkish = {
-            'chest': 'Göğüs',
-            'back': 'Sırt',
-            'legs': 'Bacak',
-            'core': 'Core',
-            'shoulders': 'Omuz',
-            'arms': 'Kol',
-            'full_body': 'Tüm Vücut'
-        }
-        
-        muscle_data = []
-        for group, count in muscle_groups.items():
-            muscle_data.append({
-                'Kas Grubu': muscle_group_turkish.get(group, group.title()),
-                'Antrenman': count
-            })
-        
-        df_muscle = pd.DataFrame(muscle_data)
-        
-        if not df_muscle.empty:
-            fig_pie = px.pie(df_muscle, values='Antrenman', names='Kas Grubu',
-                           title="Kas Grupları Dağılımı")
-            st.plotly_chart(fig_pie, use_container_width=True)
+        try:
+            muscle_groups = {}
+            for exercise in st.session_state.exercise_log:
+                muscle_group = exercise.get('muscle_group', 'other')
+                muscle_groups[muscle_group] = muscle_groups.get(muscle_group, 0) + 1
+            
+            # Türkçe çeviri
+            muscle_group_turkish = {
+                'chest': 'Göğüs',
+                'back': 'Sırt',
+                'legs': 'Bacak',
+                'core': 'Core',
+                'shoulders': 'Omuz',
+                'arms': 'Kol',
+                'full_body': 'Tüm Vücut'
+            }
+            
+            muscle_data = []
+            for group, count in muscle_groups.items():
+                muscle_data.append({
+                    'Kas Grubu': muscle_group_turkish.get(group, group.title()),
+                    'Antrenman': count
+                })
+            
+            df_muscle = pd.DataFrame(muscle_data)
+            
+            if not df_muscle.empty:
+                fig_pie = px.pie(df_muscle, values='Antrenman', names='Kas Grubu',
+                               title="Kas Grupları Dağılımı")
+                st.plotly_chart(fig_pie, use_container_width=True)
+        except Exception as e:
+            st.warning("Kas grupları grafiği yüklenemedi.")
     
     # Günlük aktivite takvimi
     st.subheader("📅 Aktivite Takvimi")
     
-    # Son 30 günlük aktivite
-    activity_calendar = {}
-    for i in range(30):
-        date = datetime.now() - timedelta(days=29-i)
-        date_str = date.strftime('%Y-%m-%d')
+    try:
+        # Son 21 günlük aktivite (3 hafta)
+        activity_calendar = {}
+        for i in range(21):
+            date = datetime.now() - timedelta(days=20-i)
+            date_str = date.strftime('%Y-%m-%d')
+            
+            daily_exercises = 0
+            if st.session_state.exercise_log:
+                daily_exercises = len([ex for ex in st.session_state.exercise_log 
+                                      if ex.get('date', datetime.now()).date() == date.date()])
+            
+            activity_calendar[date_str] = daily_exercises
         
-        daily_exercises = len([ex for ex in st.session_state.exercise_log 
-                              if ex.get('date', datetime.now()).date() == date.date()])
+        # Heatmap benzeri görsel
+        cols = st.columns(7)
         
-        activity_calendar[date_str] = daily_exercises
-    
-    # Heatmap benzeri görsel
-    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
-    
-    for i, (date_str, count) in enumerate(list(activity_calendar.items())[-21:]):  # Son 3 hafta
-        col_index = i % 7
-        cols = [col1, col2, col3, col4, col5, col6, col7]
-        
-        with cols[col_index]:
-            if count > 0:
-                st.markdown(f"""
-                <div style="background: #FF6B35; color: white; padding: 0.5rem; 
-                           border-radius: 4px; text-align: center; margin: 0.2rem 0;">
-                    <small>{datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m')}</small><br>
-                    <strong>{count}</strong>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style="background: #f0f0f0; padding: 0.5rem; 
-                           border-radius: 4px; text-align: center; margin: 0.2rem 0;">
-                    <small>{datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m')}</small><br>
-                    <span>0</span>
-                </div>
-                """, unsafe_allow_html=True)
+        for i, (date_str, count) in enumerate(activity_calendar.items()):
+            col_index = i % 7
+            
+            with cols[col_index]:
+                if count > 0:
+                    st.markdown(f"""
+                    <div style="background: #FF6B35; color: white; padding: 0.5rem; 
+                               border-radius: 4px; text-align: center; margin: 0.2rem 0;">
+                        <small>{datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m')}</small><br>
+                        <strong>{count}</strong>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="background: #f0f0f0; padding: 0.5rem; 
+                               border-radius: 4px; text-align: center; margin: 0.2rem 0;">
+                        <small>{datetime.strptime(date_str, '%Y-%m-%d').strftime('%d/%m')}</small><br>
+                        <span>0</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+    except Exception as e:
+        st.warning("Aktivite takvimi yüklenemedi.")
     
     # Hedefler
     st.subheader("🎯 Hedefler ve Başarılar")
     
     goals = [
         {"name": "İlk 30 Antrenman", "current": total_workouts, "target": 30, "icon": "🏃"},
-        {"name": "1000 Push-up", "current": 750, "target": 1000, "icon": "💪"},
-        {"name": "500 Squat", "current": 320, "target": 500, "icon": "🦵"},
+        {"name": "1000 Push-up", "current": min(1000, total_reps), "target": 1000, "icon": "💪"},
+        {"name": "500 Squat", "current": min(500, total_reps // 2), "target": 500, "icon": "🦵"},
         {"name": "Beast Mode %90", "current": st.session_state.beast_mode_score, "target": 90, "icon": "🦁"}
     ]
     
@@ -1133,12 +1188,22 @@ def progress_tab():
 
 # Ana fonksiyon
 def main():
-    init_session_state()
-    
-    if not st.session_state.authenticated:
-        login_page()
-    else:
-        main_app()
+    try:
+        init_session_state()
+        
+        # MongoDB koleksiyonlarını ayarla
+        if st.session_state.db:
+            setup_collections(st.session_state.db)
+        
+        if not st.session_state.authenticated:
+            login_page()
+        else:
+            main_app()
+    except Exception as e:
+        st.error(f"Uygulama hatası: {str(e)}")
+        st.info("Sayfa yenileniyor...")
+        time.sleep(2)
+        st.rerun()
 
 if __name__ == "__main__":
     main()
