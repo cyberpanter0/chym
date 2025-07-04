@@ -172,25 +172,13 @@ def verify_password(password, hashed_password):
 @st.cache_resource
 def init_mongodb():
     try:
-        # MongoDB bağlantı ayarları - ssl_context parametresi kaldırıldı
-        client = MongoClient(
-            MONGODB_URI,
-            tls=True,
-            tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=30000,  # Timeout süresini artır
-            connectTimeoutMS=20000,
-            socketTimeoutMS=20000,
-            maxPoolSize=10
-        )
-        
-        # Test bağlantısı
+        # En basit bağlantı
+        client = MongoClient(MONGODB_URI)
         client.admin.command('ping')
         st.success("✅ MongoDB Atlas bağlantısı başarılı!")
-        db = client['beast_mode']
-        return db
+        return client['beast_mode']
     except Exception as e:
         st.error(f"❌ MongoDB bağlantı hatası: {str(e)}")
-        # Offline moda geç
         return create_offline_db()
 
 def create_offline_db():
